@@ -21,7 +21,7 @@ template:
     - protocol: responses
       version: v1
   environment_variables:
-    # https://aifv2-01-std-foundry.services.ai.azure.com/api/projects/aifv2-01-std-foundryproj01-default, gpt-4o
+    # https://<foundry_account>.services.ai.azure.com/api/projects/<foundry_project>, gpt-4o
     - name: AIF_STD_PROJECT_ENDPOINT    
       value: ${AIF_STD_PROJECT_ENDPOINT}
     - name: MODEL_DEPLOYMENT_NAME
