@@ -1,5 +1,5 @@
 # Unique identifier/name for this agent
-name: hostedagent05-echoagent
+name: hostedagent01
 
 # Brief description of what this agent does
 description: >
@@ -15,7 +15,7 @@ metadata:
     - Microsoft Agent Framework
 
 template:
-  name: hostedagent05-echoagent
+  name: hostedagent01
   kind: hosted
   protocols:
     - protocol: responses
