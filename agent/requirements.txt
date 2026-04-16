@@ -1,0 +1,12 @@
+azure-ai-agentserver-agentframework==1.0.0b17
+azure-ai-agentserver-core==1.0.0b17
+agent-framework-azure-ai==1.0.0rc3
+agent-framework-core==1.0.0rc3
+azure-ai-agents==1.2.0b5
+azure-ai-inference==1.0.0b9
+azure-ai-projects==2.0.0b4
+azure-core==1.39.0
+azure-core-tracing-opentelemetry==1.0.0b12
+azure-identity==1.26.0b2
+python-dotenv>=1.0.0
+tzdata>=2025.1

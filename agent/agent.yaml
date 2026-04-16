@@ -1,0 +1,28 @@
+# Unique identifier/name for this agent
+name: hostedagent05-echoagent
+
+# Brief description of what this agent does
+description: >
+  This sample demonstrates how to create a custom AI agent answer a simple question.  
+  It is useful for testing, debugging, and learning how to build custom agents.
+
+metadata:
+  # Categorization tags for organizing and discovering agents
+  tags:
+    - AI Agent Hosting
+    - Azure AI AgentServer
+    - Custom Agent Implementation
+    - Microsoft Agent Framework
+
+template:
+  name: hostedagent05-echoagent
+  kind: hosted
+  protocols:
+    - protocol: responses
+      version: v1
+  environment_variables:
+    # https://aifv2-01-std-foundry.services.ai.azure.com/api/projects/aifv2-01-std-foundryproj01-default, gpt-4o
+    - name: AIF_STD_PROJECT_ENDPOINT    
+      value: ${AIF_STD_PROJECT_ENDPOINT}
+    - name: MODEL_DEPLOYMENT_NAME
+      value: ${MODEL_DEPLOYMENT_NAME}
