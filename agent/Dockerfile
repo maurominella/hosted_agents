@@ -10,6 +10,7 @@ WORKDIR /app/user_agent
 # then upgrade agent-framework-* to the required rc versions
 RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 8080
+# This is actually not needed
+EXPOSE 8088
 
 CMD ["python", "main.py"]
