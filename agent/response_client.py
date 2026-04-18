@@ -5,8 +5,8 @@ from agent_framework.openai import OpenAIChatClient
 from agent_framework import Agent
 
 azure_endpoint = "http://localhost:8089"
-api_key = "whatever key"
-model = "whatever model"
+api_key = "unexisting key"
+model = "unexisting model"
 
 openai_chat_client = OpenAIChatClient(
     base_url=azure_endpoint,
