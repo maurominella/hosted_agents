@@ -32,5 +32,5 @@ EOF
 docker build -t user-agent .
 
 # run the container, mapping external 8089 to internal 8088
-docker run -p 8089:8080 user-agent
+docker run -p 8089:8088 user-agent
 ```
