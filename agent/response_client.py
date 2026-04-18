@@ -5,13 +5,13 @@ from agent_framework.openai import OpenAIChatClient
 from agent_framework import Agent
 
 azure_endpoint = "http://localhost:8089"
-api_key = "whatever"
-model_id = "whatever"
+api_key = "whatever key"
+model = "whatever model"
 
 openai_chat_client = OpenAIChatClient(
     base_url=azure_endpoint,
     api_key=api_key,
-    model=model_id
+    model=model
 )
 
 agent = Agent(
