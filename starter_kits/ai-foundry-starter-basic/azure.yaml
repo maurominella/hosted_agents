@@ -17,6 +17,18 @@ services:
                     cpu: "0.5"
                     memory: 1Gi
             startupCommand: python main.py
+    ha02-azureopenaiagent:
+        project: src/ha02-azureopenaiagent
+        host: azure.ai.agent
+        language: docker
+        docker:
+            remoteBuild: true
+        config:
+            container:
+                resources:
+                    cpu: "0.5"
+                    memory: 1Gi
+            startupCommand: python main.py
 infra:
     provider: bicep
     path: ./infra

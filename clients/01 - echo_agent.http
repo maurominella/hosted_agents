@@ -1,0 +1,39 @@
+# https://learn.microsoft.com/en-us/azure/ai-services/agents/quickstart?pivots=rest-api
+# az login --use-device-code --tenant <your-tenant-id-or-domain>
+# az config set extension.dynamic_install_allow_preview=true
+# az account tenant list --output table
+# for Azure Management tasks --> az account get-access-token --resource https://management.core.windows.net/
+# for Foundry Applications --> az account get-access-token --resource https://ai.azure.com/
+# for OpenAI tasks --> az account get-access-token --resource https://cognitiveservices.azure.com/
+# for Azure Search tasks --> az account get-access-token --resource https://search.azure.com/
+# for Machine Learning tasks --> az account get-access-token --resource https://ml.azure.com/ 
+
+@baseUrl = http://localhost:8088
+@access_token = access_token***
+@user_oid = user_oid***
+@tenant_id = tenant_id***
+
+### invoking MCP server without authentication
+POST {{baseUrl}}/responses
+Content-Type: application/json
+ 
+{
+    "input": "Where is Sydney? What is the current time there?"
+}
+
+
+### invoking MCP server with authentication
+POST {{baseUrl}}/responses
+Content-Type: application/json
+x-aml-oid: {{user_oid}}
+x-aml-tid: {{tenant_id}}
+ 
+{
+    "input": "Where is Sydney? What is the current time there?"
+}
+
+
+### invoking MCP server
+
+GET {{baseUrl}}/mcp
+Content-Type: application/json
