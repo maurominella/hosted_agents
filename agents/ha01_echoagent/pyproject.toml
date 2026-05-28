@@ -1,0 +1,11 @@
+[project]
+name = "ha01-echoagent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "azure-ai-agentserver-agentframework==1.0.0b17",
+    "azure-monitor-opentelemetry>=1.8.2",
+    "python-dotenv>=1.2.2",
+]
