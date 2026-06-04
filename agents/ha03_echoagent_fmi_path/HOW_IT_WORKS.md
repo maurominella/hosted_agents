@@ -81,53 +81,12 @@ tid=<tenant_id>
 ---
 
 ## From Local Simulation to Real Microsoft Foundry Execution
+### Important limitation in Foundry Hosted Agent
 
-When the agent is deployed as a **Foundry Hosted Agent**, the flow changes: the user authenticates via **Entra ID (Azure AD)** before reaching the agent, and Foundry itself injects the identity — you no longer need to pass `x-aml-oid` / `x-aml-tid` manually.
+As we saw above, in local execution `x-aml-oid` and `x-aml-tid` can be passed manually to simulate caller identity.
 
-### The `fmi_path` flow
+However, when the agent is deployed as a Microsoft Foundry Hosted Agent, the platform does not currently guarantee that the original caller Bearer token is forwarded to the container, nor that `x-aml-oid` and `x-aml-tid` are injected into the internal request.
 
-```
-User / Client app
-      │
-      │  HTTPS request  +  Bearer token (Entra ID JWT)
-      ▼
-Microsoft Foundry Gateway
-      │
-      │  Validates the JWT
-      │  Extracts  oid  and  tid  from token claims
-      │  Injects   x-aml-oid  and  x-aml-tid  into the internal request
-      ▼
-AgentServer (your container)
-      │
-      │  Reads the headers → populates ContextVarUserProvider
-      ▼
-EchoAgent.run()
-      │
-      └─ user_info.object_id  ✓  (real caller OID)
-         user_info.tenant_id  ✓  (real caller TID)
-```
+Therefore, `ContextVarUserProvider.default_user_info_context.get(None)` may return `None` in Hosted Agent runtime.
 
-The key insight is that the **same header mechanism** is used in both cases. The difference is:
-
-| Environment | Who injects `x-aml-oid` / `x-aml-tid` |
-|-------------|----------------------------------------|
-| Local | You (manually in the HTTP request) |
-| Microsoft Foundry | The Foundry Gateway (automatically, after JWT validation) |
-
-This means your agent code does **not need to change** between local development and production — `ContextVarUserProvider.default_user_info_context.get(None)` works identically in both environments.
-
-### Calling the deployed agent from Foundry
-
-Once deployed, clients call the agent through the Foundry endpoint and must present a valid Entra ID Bearer token:
-
-```http
-POST https://<foundry_account>.services.ai.azure.com/api/projects/<project>/responses
-Content-Type: application/json
-Authorization: Bearer <entra_id_access_token>
-
-{
-    "input": "Where is Sydney? What is the current time there?"
-}
-```
-
-Foundry validates the token, then forwards the request to your container with the resolved `x-aml-oid` and `x-aml-tid` headers already set. The agent receives the exact same `user_info` object it would have received locally when you passed the headers manually.
+For per-user state isolation, use the platform-provided isolation keys, such as `x-agent-user-isolation-key` and `x-agent-chat-isolation-key`, when available. These are opaque partition keys and should not be treated as Entra ID `oid` or `tid`.

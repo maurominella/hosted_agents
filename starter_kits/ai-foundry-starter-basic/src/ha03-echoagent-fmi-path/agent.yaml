@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/AgentSchema/refs/heads/main/schemas/v1.0/ContainerAgent.yaml
+
+kind: hosted
+name: ha03-echoagent-fmi-path
+description: |
+    This sample demonstrates how to create a custom AI agent and how to extract caller identity (object ID and tenant ID) from the request context via ContextVarUserProvider. It is useful for testing, debugging, and verifying that user identity is correctly propagated both in local simulation (via x-aml-oid / x-aml-tid headers) and in real Microsoft Foundry execution.
+metadata:
+    tags:
+        - AI Agent Hosting
+        - Azure AI AgentServer
+        - Custom Agent Implementation
+        - Microsoft Agent Framework
+        - User Identity
+        - fmi_path
+        - ContextVarUserProvider
+protocols:
+    - protocol: responses
+      version: v1
+resources:
+    cpu: "0.5"
+    memory: 1Gi
+environment_variables:
+    - name: AIF_STD_PROJECT_ENDPOINT
+      value: ${AIF_STD_PROJECT_ENDPOINT}
+    - name: MODEL_DEPLOYMENT_NAME
+      value: ${MODEL_DEPLOYMENT_NAME}

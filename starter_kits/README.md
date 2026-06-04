@@ -119,6 +119,7 @@ infra:
 `azd provision`<br/>
 ![alt text](./_README_IMAGES/image-4.png)
 
+
 ## Deploy the image into ACR and the agent into Foundry Project
 `azd deploy ha01-echoagent`<br/>
 ![alt text](./_README_IMAGES/image-5.png)
