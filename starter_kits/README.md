@@ -7,7 +7,6 @@ azd init --template Azure-Samples/ai-foundry-starter-basic
 
 ### During this step, specify the environment name (same as Microsoft Foundry Project name, for example)
 ![alt text](./_README_IMAGES/image-0.png)
-![alt text](image.png)
 ```
 mauromi@mauromistudio01:~/git_repos/hosted_agents/starter_kits$ azd init --template Azure-Samples/ai-foundry-starter-basic
 
