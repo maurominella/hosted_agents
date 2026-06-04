@@ -2,18 +2,19 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-COPY main.py agent.yaml requirements.txt .env ./
+# Copy only the application files — do NOT copy .env (secrets must be
+# injected at runtime via environment variables or --env-file)
+
+# Copy requirements first to leverage Docker layer caching:
+# pip install is re-executed only when requirements.txt changes,
+# not on every source code change.
+COPY requirements.txt ./
 
 RUN pip install --no-cache-dir --upgrade pip && \
-    if [ -f requirements.txt ]; then \
-        pip install --no-cache-dir -r requirements.txt; \
-    else \
-        echo "No requirements.txt found"; \
-    fi
+    pip install --no-cache-dir -r requirements.txt
 
-    # Run as non-root user for security
-RUN useradd --no-create-home --shell /bin/false appuser
-USER appuser
+# Copy source code after dependencies — changes here only invalidate this layer.
+COPY main.py .env ./
 
 EXPOSE 8088
 

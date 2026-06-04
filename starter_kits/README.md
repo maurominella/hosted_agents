@@ -2,25 +2,48 @@
 
 ## Download the starter kit from [azd-ai-starter-basic](https://github.com/Azure-Samples/azd-ai-starter-basic)
 ```
-azd init -t https://github.com/Azure-Samples/azd-ai-starter-basic
+azd init --template Azure-Samples/ai-foundry-starter-basic
 ```
 
 ### During this step, specify the environment name (same as Microsoft Foundry Project name, for example)
 ![alt text](./_README_IMAGES/image-0.png)
+![alt text](image.png)
 ```
-Loading template code to: /home/mauromi/git_repos/maf/python/hosted_agents/starter_kits/azd-ai-starter-basic
+mauromi@mauromistudio01:~/git_repos/hosted_agents/starter_kits$ azd init --template Azure-Samples/ai-foundry-starter-basic
 
-? Enter a unique environment name: **aif7159-standard-agent-project**
+Let's get your development environment ready.
+
+Discover and install Azure development tools such as Azure CLI, GitHub Copilot CLI, and Azure AI extensions.
+To skip this check, set AZD_SKIP_FIRST_RUN=true or run azd config set tool.firstRunCompleted true.
+
+? Would you like to check your Azure development tools?: Yes
+
+
+  ✓ Azure CLI (2.83.0)
+  ✓ GitHub Copilot CLI (installed)
+  ✓ Azure Tools VS Code Extension (0.12.6)
+  ✓ Bicep VS Code Extension (0.43.8)
+  ○ GitHub Copilot Chat VS Code Extension — not installed
+  ○ Azure MCP Server — not installed
+  ✓ azd AI Agent Extensions (0.1.37-preview)
+
+All recommended tools are installed. You're all set!
+
+Initializing an app to run on Azure (azd init)
+
+  (✓) Done: Downloading template code to: /home/mauromi/git_repos/hosted_agents/starter_kits/ai-foundry-starter-basic
+
+? Enter a unique environment name: aif7159-standard-agent-project
 
 Installing required extensions...
-  (-) Skipped: Installing azure.ai.agents extension (version 0.1.27-preview already installed)
+  (-) Skipped: Installing azure.ai.agents extension (version 0.1.37-preview already installed)
 
 SUCCESS: New project initialized!
-You can view the template code in your directory: /home/mauromi/git_repos/maf/python/hosted_agents/starter_kits/azd-ai-starter-basic
+You can view the template code in your directory: /home/mauromi/git_repos/hosted_agents/starter_kits/ai-foundry-starter-basic
 Learn more about running 3rd party code on our DevHub: https://aka.ms/azd-third-party-code-notice
 
 Change to the project directory:
-  cd azd-ai-starter-basic
+  cd ai-foundry-starter-basic
 ```
 
 ## Add source code to the agent

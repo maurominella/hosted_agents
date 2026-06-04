@@ -1,5 +1,0 @@
-azure-ai-agentserver-agentframework==1.0.0b17
-debugpy
-agent-dev-cli
-python-dotenv
-azure-monitor-opentelemetry
