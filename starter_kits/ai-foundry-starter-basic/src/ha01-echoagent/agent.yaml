@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/AgentSchema/refs/heads/main/schemas/v1.0/ContainerAgent.yaml
+
+kind: hosted
+name: ha01-echoagent
+description: |
+    This sample demonstrates how to create a custom AI agent answer a simple question.   It is useful for testing, debugging, and learning how to build custom agents.
+metadata:
+    tags:
+        - AI Agent Hosting
+        - Azure AI AgentServer
+        - Custom Agent Implementation
+        - Microsoft Agent Framework
+protocols:
+    - protocol: responses
+      version: v1
+resources:
+    cpu: "0.5"
+    memory: 1Gi
+environment_variables:
+    - name: AIF_STD_PROJECT_ENDPOINT
+      value: ${AIF_STD_PROJECT_ENDPOINT}
+    - name: MODEL_DEPLOYMENT_NAME
+      value: ${MODEL_DEPLOYMENT_NAME}

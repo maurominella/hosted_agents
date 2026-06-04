@@ -52,7 +52,6 @@ For example we may create the "agents" folder in the starter kit root, then a su
 ## Create/review the manifest (file `agent.yaml`)
 ```yaml
 # Unique identifier/name for this agent
-# Unique identifier/name for this agent
 name: ha01-echoagent
 
 # Brief description of what this agent does
@@ -86,7 +85,7 @@ template:
 `azd auth login`
 
 ## Complete the configuration in the local repo
-Run `azd ai agent init -m ./agents/ha03_echoagent_fmi_path/agent.yaml`<br/>
+Run `azd ai agent init -m ./agents/ha01_echoagent/agent.yaml`<br/>
 ![alt text](./_README_IMAGES/image-3.png)
 
 ## Check the updated `azure.yaml` ***manifest***
@@ -121,13 +120,12 @@ infra:
 ![alt text](./_README_IMAGES/image-4.png)
 
 ## Deploy the image into ACR and the agent into Foundry Project
-`azd deploy ha03-echoagent-fmi-path`<br/>
+`azd deploy ha01-echoagent`<br/>
 ![alt text](./_README_IMAGES/image-5.png)
 
 
 ### As a result, in the ACR we get
 ![alt text](./_README_IMAGES/image-6.png)
-![alt text](image.png)
 
 ## Let's test it in the Azure portal (with 0% `AI Quality`)
 ![alt text](./_README_IMAGES/image-7.png)
