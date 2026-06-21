@@ -5,8 +5,8 @@ requiredVersions:
         azure.ai.agents: '>=0.1.0-preview'
 name: ai-foundry-starter-basic
 services:
-    ha01-echoagent:
-        project: src/ha01-echoagent
+    ha03-echoagent-fmi-path:
+        project: src/ha03-echoagent-fmi-path
         host: azure.ai.agent
         language: docker
         docker:

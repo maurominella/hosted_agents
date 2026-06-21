@@ -1,0 +1,42 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "2486b5cf-28b0-4f2d-b7c8-ff71aa856b72",
+  "developer": {
+    "name": "Mauro Minella",
+    "websiteUrl": "https://example.com",
+    "privacyUrl": "https://example.com/privacy",
+    "termsOfUseUrl": "https://example.com/terms"
+  },
+  "name": {
+    "short": "Echo Token Bot",
+    "full": "Echo Token Bot - Foundry SSO"
+  },
+  "description": {
+    "short": "Bot che chiama Foundry come l'utente Teams",
+    "full": "Bot che usa Teams SSO per ottenere il token utente e invocare un Foundry Hosted Agent con la stessa identita'."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#0078D4",
+  "bots": [
+    {
+      "botId": "2486b5cf-28b0-4f2d-b7c8-ff71aa856b72",
+      "scopes": ["personal"],
+      "supportsFiles": false,
+      "isNotificationOnly": false
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": [
+    "3mggpgrb-3978.euw.devtunnels.ms",
+    "token.botframework.com"
+  ],
+  "webApplicationInfo": {
+    "id": "2486b5cf-28b0-4f2d-b7c8-ff71aa856b72",
+    "resource": "api://botid-2486b5cf-28b0-4f2d-b7c8-ff71aa856b72"
+  }
+}

@@ -1,4 +1,13 @@
 {
   "projectId": "0a018404-d19a-455a-bbfa-eec34a9c7c1a",
-  "containerRegistry": "eca2eddaifv201stdfoundrypro250aacr.azurecr.io"
+  "containerRegistry": "eca2eddaifv201stdfoundrypro250aacr.azurecr.io",
+  "hostedAgentDeployOptions": {
+    "deploymentMethod": "zip",
+    "zipPackageMode": "remote",
+    "zipRuntime": "python_3_13",
+    "zipEntryPoint": [
+      "python3",
+      "main.py"
+    ]
+  }
 }

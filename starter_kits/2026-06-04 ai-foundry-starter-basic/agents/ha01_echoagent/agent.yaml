@@ -1,24 +1,21 @@
-name: ha02-azureopenaiagent-b
+# Unique identifier/name for this agent
+name: ha01-echoagent
 
 # Brief description of what this agent does
 description: >
-  A travel assistant agent that helps users find hotels in Seattle.
-  Demonstrates local Python tool execution - a key advantage of code-based 
-  hosted agents over prompt agents.
+  This sample demonstrates how to create a custom AI agent answer a simple question.  
+  It is useful for testing, debugging, and learning how to build custom agents.
 
 metadata:
-  authors:
-    - Microsoft
-    - Mauro Minella
+  # Categorization tags for organizing and discovering agents
   tags:
+    - AI Agent Hosting
     - Azure AI AgentServer
+    - Custom Agent Implementation
     - Microsoft Agent Framework
-    - Local Tools
-    - Travel Assistant
-    - Hotel Search
 
 template:
-  name: ha02-azureopenaiagent
+  name: ha01-echoagent
   kind: hosted
   protocols:
     - protocol: responses
@@ -29,6 +26,3 @@ template:
       value: ${AIF_STD_PROJECT_ENDPOINT}
     - name: MODEL_DEPLOYMENT_NAME
       value: ${MODEL_DEPLOYMENT_NAME}
-resources:
-  cpu: '1.0'
-  memory: 2.0Gi
