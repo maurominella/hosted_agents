@@ -21,3 +21,9 @@ environment_variables:
       value: ${AIF_STD_PROJECT_ENDPOINT}
     - name: MODEL_DEPLOYMENT_NAME
       value: ${MODEL_DEPLOYMENT_NAME}
+    - name: APP_OBO_TENANT_ID
+      value: ${APP_OBO_TENANT_ID}
+    - name: APP_OBO_CLIENT_ID
+      value: ${APP_OBO_CLIENT_ID}
+    - name: APP_OBO_CLIENT_SECRET
+      value: ${APP_OBO_CLIENT_SECRET}

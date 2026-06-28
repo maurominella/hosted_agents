@@ -30,6 +30,9 @@ from agent_framework import (
     normalize_messages,
 )
 from azure.ai.agentserver.agentframework import from_agent_framework
+
+import msal       # On-Behalf-Of token exchange (Token C -> Microsoft Graph token)
+import requests   # one-shot Microsoft Graph call
 # --------------------------------------------------------------------------
 
 # Configure logging - WARNING for everything else, while INFO for this module only
@@ -48,6 +51,76 @@ if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
     logger.info("Azure Monitor is active.")
 else:
     logger.info("Azure Monitor is not configured. No connection string found in environment variables.")
+
+# --------------------------------------------------------------------------
+# Static On-Behalf-Of + Microsoft Graph call
+# --------------------------------------------------------------------------
+GRAPH_SCOPES = ["https://graph.microsoft.com/Files.Read"]
+GRAPH_ROOT_CHILDREN = (
+    "https://graph.microsoft.com/v1.0/me/drive/root/children"
+    "?$select=name,size,folder&$top=200"
+)
+
+
+def _human_size(num: float) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if num < 1024:
+            return f"{num:.1f} {unit}"
+        num /= 1024
+    return f"{num:.1f} PB"
+
+
+def biggest_onedrive_folder(user_assertion: str) -> str:
+    """Exchange the user assertion (Token C) On-Behalf-Of for a Microsoft Graph
+    token, then answer the fixed question "what is the biggest folder of my
+    OneDrive home directory?". Returns a human-readable status string and never
+    raises (any failure is reported in the returned text).
+    """
+    tenant = os.environ.get("APP_OBO_TENANT_ID")
+    client_id = os.environ.get("APP_OBO_CLIENT_ID")
+    client_secret = os.environ.get("APP_OBO_CLIENT_SECRET")
+    if not (tenant and client_id and client_secret):
+        return (
+            "[graph] OBO not configured "
+            "(set APP_OBO_TENANT_ID / APP_OBO_CLIENT_ID / APP_OBO_CLIENT_SECRET)"
+        )
+
+    try:
+        # Token D: App-OBO (confidential client) exchanges Token C for a Graph token.
+        app = msal.ConfidentialClientApplication(
+            client_id,
+            authority=f"https://login.microsoftonline.com/{tenant}",
+            client_credential=client_secret,
+        )
+        result = app.acquire_token_on_behalf_of(
+            user_assertion=user_assertion, scopes=GRAPH_SCOPES
+        )
+        if "access_token" not in result:
+            return (
+                f"[graph] OBO failed: {result.get('error')}: "
+                f"{str(result.get('error_description', ''))[:300]}"
+            )
+
+        # One-shot Graph call: list OneDrive root children, pick the biggest folder.
+        resp = requests.get(
+            GRAPH_ROOT_CHILDREN,
+            headers={"Authorization": f"Bearer {result['access_token']}"},
+            timeout=30,
+        )
+        if resp.status_code != 200:
+            return f"[graph] /me/drive/root/children -> {resp.status_code}: {resp.text[:300]}"
+
+        folders = [it for it in resp.json().get("value", []) if "folder" in it]
+        if not folders:
+            return "[graph] no folders found in the OneDrive root"
+        biggest = max(folders, key=lambda it: it.get("size", 0))
+        return (
+            f"[graph] biggest OneDrive root folder: "
+            f"'{biggest.get('name')}' ({_human_size(biggest.get('size', 0))})"
+        )
+    except Exception as e:  # noqa: BLE001 - report any failure as text, never crash run()
+        return f"[graph] error: {type(e).__name__}: {e}"
+
 
 class EchoAgent(BaseAgent):
     """A simple custom agent that echoes user messages with a prefix.
@@ -133,6 +206,16 @@ class EchoAgent(BaseAgent):
             else "[diag] user assertion (Token C): NOT present in metadata"
         )
         response_text = f"{response_text}\n\n{header_status}"
+
+        # === STATIC OBO + GRAPH CALL ===
+        # If the user assertion (Token C) is present, exchange it On-Behalf-Of for
+        # a Microsoft Graph token and answer the fixed question:
+        # "what is the biggest folder of my OneDrive home directory?".
+        # NOTE: msal/requests are blocking; acceptable here for a one-shot test.
+        if assertion:
+            graph_answer = biggest_onedrive_folder(assertion)
+            logger.info("[GRAPH] %s", graph_answer)
+            response_text = f"{response_text}\n{graph_answer}"
 
         logger.info("[OUTPUT] %s", response_text)
 
