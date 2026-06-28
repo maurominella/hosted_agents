@@ -32,7 +32,7 @@
   ],
   "permissions": ["identity", "messageTeamMembers"],
   "validDomains": [
-    "3mggpgrb-3978.euw.devtunnels.ms",
+    "hpgj8rcs-3978.euw.devtunnels.ms",
     "token.botframework.com"
   ],
   "webApplicationInfo": {

@@ -27,24 +27,27 @@ class MainDialog extends ComponentDialog {
     constructor() {
         super(MAIN_DIALOG);
 
-        // === OAUTH CONNECTION FLOW (Teams SSO) — DISABLED ===
-        // Kept as a reference: to re-enable the user-token flow
-        // (e.g. to obtain the "third token" / user assertion via OAuth
-        // Connection) uncomment this OAuthPrompt and re-add promptStep
-        // in the WaterfallDialog below. Remember to configure the
-        // correct connection scope (NO longer ai.azure.com for token B).
-        // this.addDialog(
-        //     new OAuthPrompt(OAUTH_PROMPT, {
-        //         connectionName: process.env.connectionName,
-        //         text: 'Per favore accedi per continuare',
-        //         title: 'Accedi',
-        //         timeout: 300000
-        //     })
-        // );
+        // === OAUTH CONNECTION FLOW (Token C / user assertion) — ENABLED ===
+        // OAuthPrompt against the dedicated OBO connection. With Teams SSO the
+        // token arrives silently. Its result is the "third token" (Token C),
+        // a delegated user token with aud=api://app-obo/<App-OBO-clientid>,
+        // later forwarded to the agent in a custom header for the downstream OBO.
+        this.addDialog(
+            new OAuthPrompt(OAUTH_PROMPT, {
+                connectionName: process.env.OBO_CONNECTION_NAME,
+                // FALLBACK ONLY: with Teams SSO the token is exchanged silently and
+                // this card is NEVER shown. These strings appear only if the SSO
+                // token exchange fails (e.g. outside Teams, missing consent, or no
+                // webApplicationInfo in the manifest).
+                text: 'Please sign in to continue',
+                title: 'Sign in',
+                timeout: 300000
+            })
+        );
 
         this.addDialog(
             new WaterfallDialog(WATERFALL, [
-                // this.promptStep.bind(this), // <-- uncomment to re-enable the OAuthPrompt
+                this.promptStep.bind(this),
                 this.callStep.bind(this)
             ])
         );
@@ -65,51 +68,51 @@ class MainDialog extends ComponentDialog {
         }
     }
 
-    // 1) [DISABLED] Starts the OAuthPrompt: with Teams SSO the token arrives
-    //    silently. Re-enable it together with the OAuthPrompt in the constructor.
-    // async promptStep(stepContext) {
-    //     // Save the user's text to use it after login.
-    //     stepContext.values.userText = stepContext.options.userText;
-    //     return await stepContext.beginDialog(OAUTH_PROMPT);
-    // }
+    // 1) Starts the OAuthPrompt against the OBO connection: with Teams SSO the
+    //    token (Token C) arrives silently.
+    async promptStep(stepContext) {
+        // Save the user's text to use it after login.
+        stepContext.values.userText = stepContext.options.userText;
+        return await stepContext.beginDialog(OAUTH_PROMPT);
+    }
 
-    // 2) Call Foundry with the app-only token (NO user sign-in).
+    // 2) Retrieve Token C (user assertion) and call Foundry with Token B (app-only).
     async callStep(stepContext) {
-        // === [DISABLED] Retrieval of the user-token via OAuthPrompt ===
-        // With the OAuth Connection flow re-enabled, the user token would
-        // arrive here (stepContext.result). It would be used as the "third
-        // token" (user assertion) to forward to Foundry in a custom header.
-        // const tokenResponse = stepContext.result;
-        // if (!tokenResponse || !tokenResponse.token) {
-        //     await stepContext.context.sendActivity('Login non riuscito, riprova.');
-        //     return await stepContext.endDialog();
-        // }
-        //
-        // // --- TEMPORARY LOG: user-token claims (aud, name, oid, scp) ---
-        // try {
-        //     const payload = JSON.parse(
-        //         Buffer.from(tokenResponse.token.split('.')[1], 'base64').toString('utf8')
-        //     );
-        //     console.log('--- TOKEN CLAIMS ---');
-        //     console.log('aud :', payload.aud);
-        //     console.log('name:', payload.name);
-        //     console.log('upn :', payload.upn || payload.preferred_username);
-        //     console.log('oid :', payload.oid);
-        //     console.log('scp :', payload.scp);
-        //     console.log('appid:', payload.appid || payload.azp);
-        // } catch (e) {
-        //     console.log('Impossibile decodificare il token:', e.message);
-        // }
+        // === Retrieval of Token C (user assertion) via OAuthPrompt ===
+        // The delegated user token arrives here (stepContext.result). It is the
+        // "third token" (Token C, aud=api://app-obo/<App-OBO-clientid>) that will
+        // be forwarded to the agent in a custom header for the downstream OBO.
+        const tokenResponse = stepContext.result;
+        if (!tokenResponse || !tokenResponse.token) {
+            await stepContext.context.sendActivity('Sign-in failed, please try again.');
+            return await stepContext.endDialog();
+        }
+        const userAssertion = tokenResponse.token; // Token C
 
-        // Without OAuthPrompt, callStep is the FIRST step of the waterfall:
-        // the user's text arrives from stepContext.options.
-        const userText = stepContext.options.userText || 'hello';
+        // --- TEMPORARY LOG: Token C claims (aud, name, oid, scp) ---
+        try {
+            const payload = JSON.parse(
+                Buffer.from(userAssertion.split('.')[1], 'base64').toString('utf8')
+            );
+            console.log('--- TOKEN C CLAIMS (user assertion) ---');
+            console.log('aud :', payload.aud);   // expected: api://app-obo/<App-OBO-clientid>
+            console.log('name:', payload.name);
+            console.log('upn :', payload.upn || payload.preferred_username);
+            console.log('oid :', payload.oid);
+            console.log('scp :', payload.scp);    // expected: access_as_user
+            console.log('appid:', payload.appid || payload.azp);
+        } catch (e) {
+            console.log('Unable to decode Token C:', e.message);
+        }
+
+        // With promptStep first, the user's text was saved in stepContext.values.
+        const userText = stepContext.values.userText || 'hello';
         try {
             // Token B: app-only (aud=https://ai.azure.com) signed by the dedicated SP.
-            // The OAuthPrompt user token is no longer used here: it will serve
-            // as the "third token" (user assertion) for the downstream OBO.
+            // Token C (userAssertion) is retrieved above and will be forwarded to
+            // the agent in a custom header (next step: foundry.js) for the OBO.
             const foundryToken = (await foundryCredential.getToken('https://ai.azure.com/.default')).token;
-            const { answer, user } = await callFoundry(foundryToken, userText);
+            const { answer, user } = await callFoundry(foundryToken, userText, userAssertion);
             await stepContext.context.sendActivity(
                 `Foundry (user: ${user || 'n/a'}):\n${answer}`
             );
