@@ -1,6 +1,6 @@
 // test with external URI using `devtunnel host -p 3978 --allow-anonymous`
 
-// Carica le variabili dal file .env in process.env
+// Load the variables from the .env file into process.env
 require('dotenv').config();
 
 const restify = require('restify');
@@ -16,8 +16,8 @@ const {
 const { TeamsBot } = require('./bot');
 const { MainDialog } = require('./dialogs/mainDialog');
 
-// 1) Autenticazione: dice all'adapter quali sono le credenziali del bot
-//    (App Id / Password). Le legge da .env.
+// 1) Authentication: tells the adapter what the bot credentials are
+//    (App Id / Password). It reads them from .env.
 const credentialsFactory = new ConfigurationServiceClientCredentialFactory({
     MicrosoftAppId: process.env.MicrosoftAppId,
     MicrosoftAppPassword: process.env.MicrosoftAppPassword,
@@ -30,35 +30,35 @@ const botFrameworkAuthentication = new ConfigurationBotFrameworkAuthentication(
     credentialsFactory
 );
 
-// 2) Adapter: il "traduttore" tra le richieste HTTP in arrivo e il tuo bot.
+// 2) Adapter: the "translator" between incoming HTTP requests and your bot.
 const adapter = new CloudAdapter(botFrameworkAuthentication);
 
-// Gestione errori: se qualcosa va storto, lo logghiamo.
+// Error handling: if something goes wrong, we log it.
 adapter.onTurnError = async (context, error) => {
     console.error('[onTurnError]', error);
     await context.sendActivity('Si è verificato un errore nel bot.');
 };
 
-// 3) Stato: serve a OAuthPrompt per ricordare a che punto e' il login.
+// 3) State: needed by OAuthPrompt to remember where the login is.
 const memoryStorage = new MemoryStorage();
 const conversationState = new ConversationState(memoryStorage);
 const userState = new UserState(memoryStorage);
 
-// 4) Dialog (OAuthPrompt + chiamata Foundry) e bot Teams.
+// 4) Dialog (OAuthPrompt + Foundry call) and Teams bot.
 const dialog = new MainDialog();
 const bot = new TeamsBot(conversationState, userState, dialog);
 
-// 4) Web server in ascolto.
+// 4) Web server listening.
 const server = restify.createServer();
 server.use(restify.plugins.bodyParser());
 
 server.listen(process.env.PORT || 3978, () => {
-    console.log(`\nBot in ascolto su http://localhost:${server.address().port}`);
-    console.log('Endpoint messaggi: POST /api/messages');
+    console.log(`\nBot is listening on http://localhost:${server.address().port}`);
+    console.log('Message endpoint: POST /api/messages');
 });
 
-// 5) L'endpoint che Teams/Copilot chiameranno.
+// 5) The endpoint that Teams/Copilot will call.
 server.post('/api/messages', async (req, res) => {
-    // Passa la richiesta all'adapter, che poi invoca il bot.
+    // Pass the request to the adapter, which then invokes the bot.
     await adapter.process(req, res, (context) => bot.run(context));
 });

@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 from dotenv import load_dotenv
 load_dotenv()  # MUST be first: env vars must be set before any import reads them
@@ -113,6 +114,18 @@ class EchoAgent(BaseAgent):
                 response_text = f"{self.echo_prefix}{last_message.text}"
             else:
                 response_text = f"{self.echo_prefix}[Non-text message received]"
+
+        # --- What can the agent actually READ from the invocation? -----------
+        # Foundry (Vnext infra) STRIPS the HTTP Authorization header before it
+        # reaches the agent, so the raw user Bearer token is NOT available here.
+        # What IS available is the per-request context the adapter attaches as
+        # self._request_headers, populated from the request body 'metadata'.
+        request_context = getattr(self, "_request_headers", None) or {}
+        logger.info("[REQUEST_CONTEXT] %s", request_context)
+        response_text = (
+            f"{response_text}\n"
+            f"[request_context]: {json.dumps(request_context, default=str)}"
+        )
 
         logger.info("[OUTPUT] %s", response_text)
 
