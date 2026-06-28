@@ -1,9 +1,9 @@
 const axios = require('axios');
 
 // Calls the Foundry Hosted Agent passing the Foundry access token
-// (aud=ai.azure.com) in Authorization (Token B, app-only). Optionally forwards
-// Token C (user assertion, aud=App-OBO) in a custom header that Foundry passes
-// through to the agent for the downstream OBO.
+// (aud=ai.azure.com) in Authorization (Token B, app-only). Forwards Token C
+// (user assertion, aud=App-OBO) in the request body "metadata" — Foundry strips
+// HTTP headers, so metadata is the channel the agent reads for the downstream OBO.
 async function callFoundry(foundryToken, text, userAssertion) {
     const projectEndpoint = process.env.FOUNDRY_AGENT_PROJECT_ENDPOINT;
     const agentName = process.env.FOUNDRY_AGENT_NAME;
@@ -29,17 +29,24 @@ async function callFoundry(foundryToken, text, userAssertion) {
         'Content-Type': 'application/json'
     };
 
-    // Token C (user assertion) in the custom header; Foundry passes it through to
-    // the agent, which uses it as the OBO assertion to mint downstream tokens.
-    const assertionHeader = process.env.FOUNDRY_USER_ASSERTION_HEADER;
-    if (userAssertion && assertionHeader) {
-        headers[assertionHeader] = userAssertion;
-        console.log('user-assertion header:', assertionHeader, '(Token C forwarded)');
+    // Foundry enforces the OpenAI metadata limit (max 512 chars per value, up to
+    // 16 keys). A JWT is longer, so the user assertion (Token C) is split into
+    // chunks the agent reassembles. Keys: ua_n (chunk count) + ua_0..ua_{n-1}.
+    // The adapter exposes metadata to the agent as self._request_headers.
+    const metadata = {};
+    if (userAssertion) {
+        const SIZE = 500; // stay safely under the 512-char metadata value cap
+        const n = Math.ceil(userAssertion.length / SIZE);
+        metadata.ua_n = String(n);
+        for (let i = 0; i < n; i++) {
+            metadata[`ua_${i}`] = userAssertion.slice(i * SIZE, (i + 1) * SIZE);
+        }
+        console.log(`user assertion in metadata: Token C len=${userAssertion.length} in ${n} chunk(s)`);
     }
 
     const res = await axios.post(
         url,
-        { input: text },
+        { input: text, metadata },
         { headers }
     );
 

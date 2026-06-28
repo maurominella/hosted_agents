@@ -114,6 +114,26 @@ class EchoAgent(BaseAgent):
             else:
                 response_text = f"{self.echo_prefix}[Non-text message received]"
 
+        # === TEMP DIAGNOSTIC: read the forwarded user assertion (Token C) ===
+        # Foundry strips HTTP headers, so the bot sends the assertion in the request
+        # body "metadata". The agentframework adapter copies that metadata onto the
+        # agent instance as self._request_headers. Foundry caps each metadata value
+        # at 512 chars, so the bot splits the JWT across ua_n + ua_0..ua_{n-1}.
+        meta = getattr(self, "_request_headers", {}) or {}
+        try:
+            n = int(meta.get("ua_n", "0") or 0)
+        except (TypeError, ValueError):
+            n = 0
+        assertion = "".join(meta.get(f"ua_{i}", "") for i in range(n))
+        logger.info("[DIAG] _request_headers keys: %s", list(meta.keys()))
+        logger.info("[DIAG] user assertion present: %s (len=%d)", bool(assertion), len(assertion))
+        header_status = (
+            f"[diag] user assertion (Token C): FOUND (chunks={n}, len={len(assertion)})"
+            if assertion
+            else "[diag] user assertion (Token C): NOT present in metadata"
+        )
+        response_text = f"{response_text}\n\n{header_status}"
+
         logger.info("[OUTPUT] %s", response_text)
 
         # --- NON-STREAMING MODE ------------------------------------------------
