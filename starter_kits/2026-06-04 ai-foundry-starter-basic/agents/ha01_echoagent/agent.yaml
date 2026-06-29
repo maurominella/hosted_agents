@@ -19,7 +19,7 @@ template:
   kind: hosted
   protocols:
     - protocol: responses
-      version: v1
+      version: 1.0.0
   environment_variables:
     # OpenTelemetry service name -> becomes cloud_RoleName in App Insights,
     # so this agent's logs/traces are easy to isolate from APIM (mmapim04) noise.

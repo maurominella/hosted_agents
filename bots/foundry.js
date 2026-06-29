@@ -36,7 +36,7 @@ async function callFoundry(foundryToken, text, userAssertion) {
     }
 
     const res = await axios.post(
-        url, // "http://localhost:8088/responses?api-version=2025-11-15-preview"
+        url, // "http://localhost:8088/responses?api-version=v1"
         { input: text },
         { headers }
     );

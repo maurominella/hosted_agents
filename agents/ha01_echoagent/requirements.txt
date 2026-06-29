@@ -1,4 +1,4 @@
-azure-ai-agentserver-agentframework==1.0.0b17
+azure-ai-agentserver-responses==1.0.0b8
 azure-monitor-opentelemetry
 python-dotenv
 msal
