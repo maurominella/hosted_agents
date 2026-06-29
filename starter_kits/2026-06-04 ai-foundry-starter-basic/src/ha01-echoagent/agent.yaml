@@ -17,6 +17,8 @@ resources:
     cpu: "0.5"
     memory: 1Gi
 environment_variables:
+    - name: OTEL_SERVICE_NAME
+      value: ha01-echoagent
     - name: AIF_STD_PROJECT_ENDPOINT
       value: ${AIF_STD_PROJECT_ENDPOINT}
     - name: MODEL_DEPLOYMENT_NAME

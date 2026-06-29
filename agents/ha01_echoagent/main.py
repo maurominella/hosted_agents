@@ -56,7 +56,18 @@ class ClientUserTokenMiddleware:
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") == "http":
-            for key, value in scope.get("headers", []):
+            raw_headers = scope.get("headers", [])
+            # TEMP DIAGNOSTIC: log only header NAMES (never values) to discover
+            # which headers Foundry actually forwards to the container.
+            try:
+                names = sorted(k.decode("latin-1") for k, _ in raw_headers)
+                logging.getLogger(__name__).info(
+                    "[DIAG] incoming header names (%d): %s", len(names), names
+                )
+            except Exception:  # noqa: BLE001 - diagnostics must never break the request
+                pass
+            for key, value in raw_headers:
+                logger.info("key=%s, value=%s", key, value)
                 if key.lower() == self.HEADER:
                     _client_user_token.set(value.decode("latin-1"))
                     break
