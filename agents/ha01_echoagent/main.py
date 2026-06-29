@@ -33,6 +33,34 @@ from azure.ai.agentserver.agentframework import from_agent_framework
 
 import msal       # On-Behalf-Of token exchange (Token C -> Microsoft Graph token)
 import requests   # one-shot Microsoft Graph call
+from contextvars import ContextVar
+
+# Per-request user assertion (Token C), captured from the "x-client-user-token"
+# HTTP header. Foundry forwards this custom header to the agent container as-is
+# (only the Authorization header is stripped), so the assertion no longer needs
+# to be chunked into request-body metadata.
+_client_user_token: ContextVar[str] = ContextVar("client_user_token", default="")
+
+
+class ClientUserTokenMiddleware:
+    """Pure-ASGI middleware that reads the forwarded user assertion from the
+    'x-client-user-token' header and stores it in a ContextVar, so run() can read
+    it without LLM involvement. Pure-ASGI (not BaseHTTPMiddleware) keeps the value
+    in the same task/context as the agent execution.
+    """
+
+    HEADER = b"x-client-user-token"
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            for key, value in scope.get("headers", []):
+                if key.lower() == self.HEADER:
+                    _client_user_token.set(value.decode("latin-1"))
+                    break
+        await self.app(scope, receive, send)
 # --------------------------------------------------------------------------
 
 # Configure logging - WARNING for everything else, while INFO for this module only
@@ -188,22 +216,25 @@ class EchoAgent(BaseAgent):
                 response_text = f"{self.echo_prefix}[Non-text message received]"
 
         # === TEMP DIAGNOSTIC: read the forwarded user assertion (Token C) ===
-        # Foundry strips HTTP headers, so the bot sends the assertion in the request
-        # body "metadata". The agentframework adapter copies that metadata onto the
-        # agent instance as self._request_headers. Foundry caps each metadata value
-        # at 512 chars, so the bot splits the JWT across ua_n + ua_0..ua_{n-1}.
-        meta = getattr(self, "_request_headers", {}) or {}
-        try:
-            n = int(meta.get("ua_n", "0") or 0)
-        except (TypeError, ValueError):
-            n = 0
-        assertion = "".join(meta.get(f"ua_{i}", "") for i in range(n))
-        logger.info("[DIAG] _request_headers keys: %s", list(meta.keys()))
-        logger.info("[DIAG] user assertion present: %s (len=%d)", bool(assertion), len(assertion))
+        # Primary channel: the "x-client-user-token" header, forwarded by Foundry
+        # and captured by ClientUserTokenMiddleware into a ContextVar (no chunking).
+        # Fallback: legacy chunked request-body metadata (ua_n + ua_0..ua_{n-1}),
+        # kept for local/back-compat tests.
+        assertion = _client_user_token.get("")
+        source = "header"
+        if not assertion:
+            meta = getattr(self, "_request_headers", {}) or {}
+            try:
+                n = int(meta.get("ua_n", "0") or 0)
+            except (TypeError, ValueError):
+                n = 0
+            assertion = "".join(meta.get(f"ua_{i}", "") for i in range(n))
+            source = "metadata" if assertion else "none"
+        logger.info("[DIAG] user assertion source=%s present=%s len=%d", source, bool(assertion), len(assertion))
         header_status = (
-            f"[diag] user assertion (Token C): FOUND (chunks={n}, len={len(assertion)})"
+            f"[diag] user assertion (Token C): FOUND via {source} (len={len(assertion)})"
             if assertion
-            else "[diag] user assertion (Token C): NOT present in metadata"
+            else "[diag] user assertion (Token C): NOT present (header or metadata)"
         )
         response_text = f"{response_text}\n\n{header_status}"
 
@@ -251,4 +282,7 @@ def create_agent() -> EchoAgent:
 
 if __name__ == "__main__":
     MyEchoAgent = create_agent()
-    from_agent_framework(MyEchoAgent).run()
+    server = from_agent_framework(MyEchoAgent)
+    # Capture the forwarded user assertion from the x-client-user-token header.
+    server.app.add_middleware(ClientUserTokenMiddleware)
+    server.run()

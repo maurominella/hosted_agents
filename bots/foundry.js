@@ -24,29 +24,20 @@ async function callFoundry(foundryToken, text, userAssertion) {
     }
 
     // Token B (app-only) in Authorization; Foundry validates it for RBAC and strips it.
+    // Token C (user assertion) travels in the custom header "x-client-user-token",
+    // which Foundry forwards to the agent container as-is (no chunking needed).
     const headers = {
         Authorization: `Bearer ${foundryToken}`,
         'Content-Type': 'application/json'
     };
-
-    // Foundry enforces the OpenAI metadata limit (max 512 chars per value, up to
-    // 16 keys). A JWT is longer, so the user assertion (Token C) is split into
-    // chunks the agent reassembles. Keys: ua_n (chunk count) + ua_0..ua_{n-1}.
-    // The adapter exposes metadata to the agent as self._request_headers.
-    const metadata = {};
     if (userAssertion) {
-        const SIZE = 500; // stay safely under the 512-char metadata value cap
-        const n = Math.ceil(userAssertion.length / SIZE);
-        metadata.ua_n = String(n);
-        for (let i = 0; i < n; i++) {
-            metadata[`ua_${i}`] = userAssertion.slice(i * SIZE, (i + 1) * SIZE);
-        }
-        console.log(`user assertion in metadata: Token C len=${userAssertion.length} in ${n} chunk(s)`);
+        headers['x-client-user-token'] = userAssertion;
+        console.log(`user assertion in header x-client-user-token: Token C len=${userAssertion.length}`);
     }
 
     const res = await axios.post(
         url,
-        { input: text, metadata },
+        { input: text },
         { headers }
     );
 

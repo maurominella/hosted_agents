@@ -21,6 +21,10 @@ template:
     - protocol: responses
       version: v1
   environment_variables:
+    # OpenTelemetry service name -> becomes cloud_RoleName in App Insights,
+    # so this agent's logs/traces are easy to isolate from APIM (mmapim04) noise.
+    - name: OTEL_SERVICE_NAME
+      value: ha01-echoagent
     # https://<foundry_account>.services.ai.azure.com/api/projects/<foundry_project>, gpt-4o
     - name: AIF_STD_PROJECT_ENDPOINT    
       value: ${AIF_STD_PROJECT_ENDPOINT}

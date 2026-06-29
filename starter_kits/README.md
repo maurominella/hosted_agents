@@ -124,10 +124,9 @@ infra:
 For example:
 ```
 azd env set AIF_STD_PROJECT_ENDPOINT https://foundry7159.services.ai.azure.com/api/projects/azd azd env set MODEL_DEPLOYMENT_NAME gpt-4.1-mini-1
-env set APP_OBO_TENANT_ID 3ad***
+azd env set APP_OBO_TENANT_ID 3ad***
 azd env set APP_OBO_CLIENT_ID 3a0***
 azd env set APP_OBO_CLIENT_SECRET Vf4***
-aif7159-standard-agent-project
 ```
 
 ## Deploy the image into ACR and the agent into Foundry Project
