@@ -80,8 +80,8 @@ def biggest_onedrive_folder(user_assertion: str) -> str:
         # Token D: App-OBO (confidential client) exchanges Token C for a Graph token.
         app = msal.ConfidentialClientApplication(
             client_id,
-            authority=f"https://login.microsoftonline.com/{tenant}",
             client_credential=client_secret,
+            authority=f"https://login.microsoftonline.com/{tenant}",
         )
         result = app.acquire_token_on_behalf_of(
             user_assertion=user_assertion, scopes=GRAPH_SCOPES

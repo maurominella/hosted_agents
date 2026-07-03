@@ -2,8 +2,9 @@ const axios = require('axios');
 
 // Calls the Foundry Hosted Agent passing the Foundry access token
 // (aud=ai.azure.com) in Authorization (Token B, app-only). Forwards Token C
-// (user assertion, aud=App-OBO) in the request body "metadata" — Foundry strips
-// HTTP headers, so metadata is the channel the agent reads for the downstream OBO.
+// (user assertion, aud=App-OBO) in the custom header "x-client-user-token",
+// which Foundry forwards to the agent container as-is; the agent reads it via
+// context.client_headers for the downstream OBO (no body metadata, no chunking).
 async function callFoundry(foundryToken, text, userAssertion) {
     const projectEndpoint = process.env.FOUNDRY_AGENT_PROJECT_ENDPOINT;
     const agentName = process.env.FOUNDRY_AGENT_NAME;
