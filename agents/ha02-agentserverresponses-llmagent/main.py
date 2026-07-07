@@ -9,7 +9,9 @@ the reply back through the Responses protocol. See README.md for setup.
 from monitoring import logger # this has to stay here so that the Azure Monitor setup in init.py runs before any other imports
 import asyncio
 import os
+import ast
 
+from utils import get_token_obo
 from azure.ai.projects import AIProjectClient
 from azure.identity import DefaultAzureCredential
 
@@ -66,6 +68,7 @@ async def handler(
     """Forward user input to the model with conversation history."""
     user_asssertion=context.client_headers.get(os.environ["CLIENT_USER_TOKEN_HEADER"], "")
     logger.info(f"User assertion: {user_asssertion}")
+    graph_token = get_token_obo(user_asssertion, scopes=ast.literal_eval(os.environ["GRAPH_SCOPES"]))
     user_input = await context.get_input_text() or "Hello!"
     history = await context.get_history()
     input_items = _build_input(user_input, history)
