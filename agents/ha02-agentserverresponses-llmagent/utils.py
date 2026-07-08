@@ -11,10 +11,10 @@ GRAPH_ROOT_CHILDREN = (
 
 
 def token_exchange(user_assertion: str, scopes:list) -> str:
-    tenant_id = os.environ.get("APP_OBO_TENANT_ID")
-    client_id = os.environ.get("APP_OBO_CLIENT_ID")
-    client_secret = os.environ.get("APP_OBO_CLIENT_SECRET")
-    if not (tenant_id and client_id and client_secret):
+    app_obo_tenant_id = os.environ.get("APP_OBO_TENANT_ID")
+    app_obo_client_id = os.environ.get("APP_OBO_CLIENT_ID")
+    app_obo_client_secret = os.environ.get("APP_OBO_CLIENT_SECRET") # retrieved from Azure Key Vault in main.py
+    if not (app_obo_tenant_id and app_obo_client_id and app_obo_client_secret):
         return (
             "[graph] OBO not configured "
             "(set APP_OBO_TENANT_ID / APP_OBO_CLIENT_ID / APP_OBO_CLIENT_SECRET)"
@@ -22,9 +22,9 @@ def token_exchange(user_assertion: str, scopes:list) -> str:
 
     # Token D: App-OBO (confidential client) exchanges Token C for a Graph token.
     app = msal.ConfidentialClientApplication(
-        client_id,
-        client_credential=client_secret,
-        authority=f"https://login.microsoftonline.com/{tenant_id}",
+        app_obo_client_id,
+        client_credential=app_obo_client_secret,
+        authority=f"https://login.microsoftonline.com/{app_obo_tenant_id}",
     )
     result = app.acquire_token_on_behalf_of(
         user_assertion=user_assertion, scopes=scopes
