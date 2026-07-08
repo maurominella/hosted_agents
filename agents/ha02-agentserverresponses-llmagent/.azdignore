@@ -1,3 +1,7 @@
-agent.manifest.yaml
-agent.yaml
-.env.example
+# Allowlist model: exclude everything, then re-include ONLY what the agent
+# needs at runtime (mirrors .agentignore and the Dockerfile COPY set).
+/*
+!main.py
+!monitoring.py
+!utils.py
+!requirements.txt

@@ -1,8 +1,12 @@
 # Starter Kit generation
 
 ## Download the starter kit from [azd-ai-starter-basic](https://github.com/Azure-Samples/azd-ai-starter-basic)
-```
-azd init --template Azure-Samples/ai-foundry-starter-basic
+```bash
+starterkit_folder=~/git_repos/hosted_agents/starter_kits/2026-07-07_ai-foundry-starter-basic
+rm -r "$starterkit_folder"
+mkdir -p "$starterkit_folder"
+cd "$starterkit_folder"
+azd init --template Azure-Samples/ai-foundry-starter-basic .
 ```
 
 ### During this step, specify the environment name (same as Microsoft Foundry Project name, for example)
@@ -46,7 +50,8 @@ Change to the project directory:
 ```
 
 ## Add source code to the agent
-For example we may create the "agents" folder in the starter kit root, then a subfolder with the specific agent name and finally the following 4 files:<br/>
+For better segratation, I'm used to create the "agents" folder in the starter kit root, then a subfolder with the specific agent name.<br/>
+In this case, I already have a working agent based on the Hosted Agents GitHub repo:  [Hello World agent (Responses, without a framework, Python)](https://github.com/microsoft-foundry/foundry-samples/tree/main/samples/python/hosted-agents/bring-your-own/responses/hello-world):<br/>
 ![alt text](./_README_IMAGES/image-2.png)
 
 ## Create/review the manifest (file `agent.yaml`)
