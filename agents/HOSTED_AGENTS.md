@@ -1,13 +1,8 @@
 # Microsoft Foundry Hosted Agents — Building, Testing, and Deploying an Agent End‑to‑End
 
-> A complete, hands‑on walkthrough for building a **Foundry Hosted Agent** in Python, running and debugging it locally, upgrading it to the **Microsoft Agent Framework (MAF)**, wiring a **Microsoft Graph** tool through **On‑Behalf‑Of (OBO)**, and finally deploying it into an existing **Microsoft Foundry** project with the **Azure Developer CLI (`azd`)**.
+> A complete, hands‑on walkthrough for building a **Foundry Hosted Agent** in Python, running and debugging it locally, securing its secrets with **Azure Key Vault + Managed Identity**, upgrading it to the **Microsoft Agent Framework (MAF)**, wiring a **Microsoft Graph** tool through **On‑Behalf‑Of (OBO)**, and finally deploying it into a **Microsoft Foundry** project with the **Azure Developer CLI (`azd`)**.
 >
-> This guide is based on a real, working end‑to‑end setup: the agent is created, tested locally, and then published into a Foundry project — the full round trip.
-
----
-
-> [!IMPORTANT]
-> **Before publishing this repository publicly**, replace the real identifiers in the examples (tenant ID, client ID, subscription ID, resource IDs, Key Vault URL, project endpoint, and especially the **Application Insights connection string**) with placeholders. Never commit a real `.env`, connection string, or client secret to source control.
+> This guide is based on a real, working end‑to‑end setup: the agent (`hello-world-python-responses`) is created, tested locally, and then published into a Foundry project — the full round trip.
 
 ---
 
@@ -20,13 +15,14 @@
 - [3. Which Agent Server Samples Exist](#3-which-agent-server-samples-exist)
 - [4. Schema Change — July 6, 2026 (`0.1.0-preview` → `1.0.0-beta.4`)](#4-schema-change--july-6-2026-010-preview--100-beta4)
 - [5. Setting Up the Agent Locally](#5-setting-up-the-agent-locally)
-- [6. Testing the Hosted Agent Locally](#6-testing-the-hosted-agent-locally)
-- [7. Adding a Dockerfile](#7-adding-a-dockerfile)
-- [8. From "Responses" to "Responses + Agent Framework (MAF)"](#8-from-responses-to-responses--agent-framework-maf)
-- [9. Real vs. Simulated Streaming](#9-real-vs-simulated-streaming)
-- [10. Adding a Tool to the MAF Agent (Graph + OBO)](#10-adding-a-tool-to-the-maf-agent-graph--obo)
-- [11. Agent Provisioning and Deployment](#11-agent-provisioning-and-deployment)
-- [12. Where Do We Keep the Secrets?](#12-where-do-we-keep-the-secrets)
+- [6. Storing Secrets: Key Vault and Managed Identity](#6-storing-secrets-key-vault-and-managed-identity)
+- [7. The Agent Code: monitoring.py and the Handler](#7-the-agent-code-monitoringpy-and-the-handler)
+- [8. First Local Test of the Hosted Agent](#8-first-local-test-of-the-hosted-agent)
+- [9. Adding a Dockerfile (Optional)](#9-adding-a-dockerfile-optional)
+- [10. From "Responses" to "Responses + Agent Framework (MAF)"](#10-from-responses-to-responses--agent-framework-maf)
+- [11. Real vs. Simulated Streaming](#11-real-vs-simulated-streaming)
+- [12. Adding a Tool to the MAF Agent (Graph + OBO)](#12-adding-a-tool-to-the-maf-agent-graph--obo)
+- [13. Agent Provisioning and Deployment](#13-agent-provisioning-and-deployment)
 
 ---
 
@@ -40,11 +36,11 @@ That single requirement drives most of the early design decisions — in particu
 
 1. Understand the three moving parts (Agent Service, Agent Framework, and the `azure-ai-agentserver-*` libraries).
 2. Pick the right starter sample.
-3. Scaffold, run, and debug the agent **locally**.
-4. Upgrade it from raw *Responses* handling to the **Microsoft Agent Framework**.
-5. Add a **Graph tool** that uses the propagated user token via OBO.
-6. **Provision and deploy** it into a Foundry project with `azd`.
-7. Decide **where the secrets live**.
+3. Scaffold and configure the agent **locally**.
+4. **Secure the secrets** with Key Vault + Managed Identity, and understand the agent's own identity (Microsoft Entra Agent ID).
+5. Run and debug the agent locally.
+6. Upgrade it from raw *Responses* handling to the **Microsoft Agent Framework**, and add a **Graph tool** that uses the propagated user token via OBO.
+7. **Provision and deploy** it into a Foundry project with `azd`.
 
 Every step below corresponds to something that was actually executed, with the relevant screenshots included.
 
@@ -56,23 +52,25 @@ This is the end state we reach by the end of this analysis — the "full round t
 
 ✅ **We can create the agent** from the *Hello World (Responses, bring‑your‑own)* sample, using the `azure-ai-agentserver-responses` host so that the custom `x-client-*` headers (and therefore the user assertion token) are accessible to our code.
 
-✅ **We can run and test it locally.** The agent starts on `http://0.0.0.0:8088`, answers real prompts through the Responses protocol, and we can verify that the `x-client-user-token` header is received by the handler — the foundation for OBO.
+✅ **We keep secrets out of `.env` and in Key Vault.** The OBO client secret lives in **Azure Key Vault**; locally the agent reads it with the developer's `az login` identity, and in the Foundry container it reads it with its own **Agent Identity (Microsoft Entra Agent ID)**, which is granted the **Key Vault Secrets User** role.
+
+✅ **We can run and test it locally.** The agent starts on `http://0.0.0.0:8088`, answers real prompts through the Responses protocol, and we can verify (with a breakpoint) that the `x-client-user-token` header reaches `context.client_headers` — the foundation for OBO.
 
 ✅ **We can upgrade it to the Microsoft Agent Framework (MAF)** without losing the `-responses` host, gaining automatic tool/function calling, orchestration, and a one‑line handler — while keeping Playground/Teams compatibility.
 
-✅ **We can add a Microsoft Graph tool** that reads the propagated user assertion from a per‑request `ContextVar` and performs the OBO exchange to call Graph as the user.
+✅ **We can add a Microsoft Graph tool** (`onedrive_root_folders_async`) that reads the propagated user assertion from a per‑request `ContextVar` and performs the OBO token exchange (via MSAL, with the client secret pulled from Key Vault) to call Graph as the user.
 
-✅ **We can deploy it into an existing Foundry project** with `azd deploy` (code deploy, no infrastructure provisioning), producing an immutable agent version with a live Playground and Responses endpoint.
+✅ **We can deploy it into the Foundry project** with `azd deploy` (code deploy, no container build). If the project does not exist yet, `azd provision` creates the account, project, and model first; otherwise we skip provisioning and deploy straight into the existing project.
 
-**Concretely, the final `azd deploy` succeeds and returns the hosted agent's live endpoints:**
+**Concretely, the final `azd deploy` succeeds and publishes the hosted agent as version 1, returning its live endpoints:**
 
-![Successful azd deploy: both services report "Done", the agent is published as a new immutable version, and azd prints the Playground portal URL and the Responses endpoint. "SUCCESS: Your application was deployed to Azure in 1 minute 14 seconds."](images/08-azd-deploy-success.png)
+![Successful azd deploy from /tmp/hello-world-responses: services ai-project (Done, 2s) and hello-world-python-responses (Done, 1m23s). azd prints the Agent playground (portal) URL and the Agent endpoint (responses), plus the "azd ai agent show / invoke hello-world-python-responses" hints. Final line: "SUCCESS: Your application was deployed to Azure in 1 minute 23 seconds."](images/14-azd-deploy-success.png)
 
 ```text
-AGENT_..._ENDPOINT       = https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project/agents/ha02-agentserverresponses-llmagent/versions/2
-AGENT_..._NAME           = ha02-agentserverresponses-llmagent
-AGENT_..._RESPONSES_ENDPOINT = https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project/agents/ha02-agentserverresponses-llmagent/endpoint/protocols/openai/responses?api-version=v1
-AGENT_..._VERSION        = 2
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_ENDPOINT="https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project/agents/hello-world-python-responses/versions/1"
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_NAME="hello-world-python-responses"
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_RESPONSES_ENDPOINT="https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project/agents/hello-world-python-responses/endpoint/protocols/openai/responses?api-version=v1"
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_VERSION=1
 ```
 
 The rest of this document explains **how** we get there, chapter by chapter.
@@ -162,7 +160,7 @@ It is perfect because:
 
 ### Two decisions to make before running `init`
 
-1. **Where it scaffolds.** `azd ai agent init` creates an `azure.yaml` + `src/<agent-name>/…` structure (not the simple `agents/ha01_echoagent` layout). We decide the init folder, e.g. `~/git_repos/hosted_agents/e2e/ha02_llmagent`.
+1. **Where it scaffolds.** `azd ai agent init` creates an `azure.yaml` + `src/<agent-name>/…` structure (not the simple `agents/ha01_echoagent` layout). We decide the init folder.
 2. **Which model.** The sample calls the model through the **Foundry project** (project endpoint + deployment, using the agent's managed identity). We can either **(a)** keep the sample's approach (model via the Foundry project), or **(b)** repoint it to a specific Azure OpenAI resource. In this guide we keep the Foundry‑project approach with the `gpt-5.4-mini` deployment.
 
 [↑ Back to top](#table-of-contents)
@@ -234,16 +232,18 @@ azd ai agent init -m azure.yaml
 
 ### 5.1 Clone the sample
 
-Among all the Foundry samples, the one we want is **Hello World agent (Responses, without a framework, Python)**, placed at `~/git_repos/hosted_agents/agents/ha02_agentserverresponses_llmagent`.
+Among all the Foundry samples, the one we want is **Hello World agent (Responses, without a framework, Python)**.
 
 > **Note:** the target project must contain the `gpt-5.4-mini` deployment.
 
-Inside `requirements.txt`, remove the commented line (UV does not like it) and add the libraries listed at the bottom of `requirements.txt`:
+Inside `requirements.txt`, remove what **uv** does not like — **every empty line** and **the comment line** — then add the libraries listed at the bottom of `requirements.txt` (now with pinned versions, `agent-framework` split into its `-core` and `-foundry` sub‑packages, plus `azure-keyvault-secrets` for reading the OBO secret from Key Vault):
 
 ```text
-python-dotenv
-azure-monitor-opentelemetry
-agent-framework
+python-dotenv==1.2.2
+azure-monitor-opentelemetry==1.8.9
+agent-framework-core==1.10.0
+agent-framework-foundry==1.0.1
+azure-keyvault-secrets==4.11.0
 ```
 
 Clone the sample and open it in VS Code:
@@ -253,28 +253,24 @@ rm -rf ~/git_repos/hosted_agents/agents/ha02-agentserverresponses-llmagent
 cd /tmp && rm -rf foundry-samples
 git clone --depth 1 https://github.com/microsoft-foundry/foundry-samples.git
 cp -r foundry-samples/samples/python/hosted-agents/bring-your-own/responses/hello-world \
-  ~/git_repos/hosted_agents/agents/ha02-agentserverresponses-llmagent
-cd ~/git_repos/hosted_agents/agents/ha02-agentserverresponses-llmagent
+  ./hello-world-responses
+cd ./hello-world-responses
 code .
 ```
 
-![VS Code opened on the cloned project HA02-AGENTSERVERRESPONSES-LLMAGENT (WSL: Ubuntu). The Explorer shows the sample files (agent.manifest.yaml, agent.yaml, Dockerfile, main.py, requirements.txt, …); requirements.txt is open with the three added libraries — python-dotenv, azure-monitor-opentelemetry, agent-framework — highlighted.](images/02-cloned-project-requirements.png)
+![VS Code opened on the cloned project HELLO-WORLD-RESPONSES (WSL: Ubuntu). The Explorer shows src/hello-world-python-responses with .azdignore, .dockerignore, .env.example, Dockerfile, main.py, requirements.txt; requirements.txt is open with lines 6–8 highlighted — azure-monitor-opentelemetry==1.8.9, agent-framework-core==1.10.0, agent-framework-foundry==1.0.1.](images/02-cloned-project-requirements.png)
 
 ### 5.2 Create the environment and verify the imports
 
-Create the local virtual environment with **uv** and install the dependencies:
+Create the local virtual environment with **uv**, install the dependencies, and test that all the key imports resolve:
 
 ```bash
-cd ~/git_repos/hosted_agents/agents/ha02-agentserverresponses-llmagent
+cd ./src/hello-world-python-responses
 uv init . --python 3.13
 uv venv
 source .venv/bin/activate
 uv add --active $(cat requirements.txt) --prerelease=allow
-```
 
-Then test that all the key imports resolve:
-
-```bash
 uv run python -c "
 from azure.ai.agentserver.responses import ResponsesAgentServerHost, CreateResponse, ResponseContext, TextResponse
 from agent_framework import Agent
@@ -296,23 +292,17 @@ ALL IMPORTS OK
 
 If you see **`ALL IMPORTS OK`**, the configuration is in place. The uv‑generated `pyproject.toml` captures the resolved dependency set:
 
-![The uv-generated pyproject.toml for ha02-agentserverresponses-llmagent, showing name, version 0.1.0, requires-python ">=3.13", and the dependencies list: agent-framework>=1.10.0, azure-ai-agentserver-responses==1.0.0b8, azure-ai-projects==2.0.1, azure-identity==1.25.3, azure-monitor-opentelemetry>=1.8.9, debugpy>=1.8.21, python-dotenv>=1.2.2.](images/03-pyproject-dependencies.png)
+![The uv-generated pyproject.toml for hello-world-python-responses, version 0.1.0, requires-python ">=3.13", with dependencies: agent-framework-core==1.10.0, agent-framework-foundry==1.0.1, azure-ai-agentserver-responses==1.0.0b8, azure-ai-projects==2.0.1, azure-identity==1.25.3, azure-monitor-opentelemetry==1.8.9, debugpy>=1.8.21, python-dotenv==1.2.2.](images/03-pyproject-dependencies.png)
 
-### 5.3 Add the `.env` file (local run) — and understand the three "environment" surfaces
+### 5.3 Variables for running the agent (the `.env` file)
 
 We add a `.env` file in the agent root, with the variables needed **while the agent runs locally**. The idea is to keep **no real secrets** in this file — only "durable" strings such as the `client_id` and the **name** of the secret (`APP-OBO-CLIENT-SECRET`), which is stored in the Key Vault at `KEY_VAULT_URL` under the key `APP_OBO_CLIENT_SECRET_NAME`.
 
-Because this file is **not** carried into the container, we will have to **inject** those variables into the container at deployment time. The variables to inject are declared in the `environmentVariables` section of `azure.yaml`.
+This `.env` holds **11 variables**. As we will see in [Chapter 13 — container environment variables](#132-container-environment-variables), the hosted agent on Foundry needs **two fewer** — `FOUNDRY_PROJECT_ENDPOINT` and `APPLICATIONINSIGHTS_CONNECTION_STRING` — because they are **auto‑injected by the Foundry runtime**, so there it is **9 instead of 11**.
 
-That file does **not** include two of the variables present in the agent's `.env`, namely `APPLICATIONINSIGHTS_CONNECTION_STRING` and `FOUNDRY_PROJECT_ENDPOINT`. The reason is that **these two are injected directly by the Foundry runtime**.
+**And the Key Vault?** At startup, `main.py` retrieves its endpoint and puts the secret into `os.environ["APP_OBO_CLIENT_SECRET"]`, so `utils.py` reads it as before. Naturally, `APP_OBO_CLIENT_SECRET_NAME` is **not** a vault key — it is the local variable that holds the **name** of the Key Vault secret. Reading from the vault requires it to be in **Azure RBAC** mode with the **Key Vault Secrets User** role — the topic of the [next chapter](#6-storing-secrets-key-vault-and-managed-identity).
 
-For the CLI to find the values to inject (declared in `azure.yaml`) during `azd deploy`, the CLI environment running `azd` must have them available. That is why they are placed in **another** `.env`, specific to each environment, located under `.azure/<env_name>/`. Note that this file **does** contain `FOUNDRY_PROJECT_ENDPOINT` — not because the value must be injected, but because the `azd` CLI must know **where** the Foundry project is, in order to publish the agent.
-
-**And the Key Vault?** At startup, `main.py` retrieves its endpoint and puts it into `os.environ["APP_OBO_CLIENT_SECRET"]`, so `utils.py` reads it as before. Naturally, `APP_OBO_CLIENT_SECRET_NAME` is **not** a vault key — it is the variable that holds the **name** of the secret.
-
-There are therefore **three distinct surfaces**, side by side:
-
-**① `.env` — variables used by the agent when it runs locally**
+**`.env`** — variables used by the agent when it runs locally (11 variables; all are needed to run inside the Foundry container **except** the 2 auto‑injected ones — App Insights + project endpoint):
 
 ```dotenv
 # --------------------------------------------------------
@@ -324,8 +314,8 @@ There are therefore **three distinct surfaces**, side by side:
 # Microsoft Azure section
 # --------------------------------------------------------
 KEY_VAULT_URL="https://mauromikeyvault01.vault.azure.net/"
-APP_OBO_TENANT_ID="<APP_OBO_TENANT_ID>"
-APP_OBO_CLIENT_ID="<APP_OBO_CLIENT_ID>"
+APP_OBO_TENANT_ID="3ad0b905-34ab-4116-93d9-c1dcc2d35af6"
+APP_OBO_CLIENT_ID="3a0fad96-b026-4f5f-914a-fc6348656f6b"
 APP_OBO_CLIENT_SECRET_NAME="APP-OBO-CLIENT-SECRET"
 GRAPH_SCOPES='["https://graph.microsoft.com/Files.Read"]'
 
@@ -340,57 +330,95 @@ CLIENT_USER_TOKEN_HEADER="x-client-user-token"
 # --------------------------------------------------------
 # Monitoring section
 # --------------------------------------------------------
-APPLICATIONINSIGHTS_CONNECTION_STRING="<APPLICATIONINSIGHTS_CONNECTION_STRING>"
+APPLICATIONINSIGHTS_CONNECTION_STRING="InstrumentationKey=b8637e87-3083-427a-8b03-32391c706b58;IngestionEndpoint=https://swedencentral-0.in.applicationinsights.azure.com/;LiveEndpoint=https://swedencentral.livediagnostics.monitor.azure.com/;ApplicationId=15bfc2ba-379c-4422-b11c-bbcac3cecac7"
 AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING="true"
 ENABLE_SENSITIVE_DATA="true"
 ```
 
-**② `.azure/<env>/.env` — variables used by the CLI for provisioning/deploy** (populated with `azd env set`)
+[↑ Back to top](#table-of-contents)
 
-```dotenv
-APP_OBO_CLIENT_ID="<APP_OBO_CLIENT_ID>"
-APP_OBO_CLIENT_SECRET_NAME="APP-OBO-CLIENT-SECRET"
-APP_OBO_TENANT_ID="<APP_OBO_TENANT_ID>"
-AZURE_AI_MODEL_DEPLOYMENT_NAME="gpt-5.4-mini"
-AZURE_AI_PROJECT_ID="/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/rg-aifoundry7159/providers/Microsoft.CognitiveServices/accounts/foundry7159/projects/aif7159-standard-agent-project"
-AZURE_ENV_NAME="ha02-agentserverresponses-llmagent-dev"
-AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING="true"
-AZURE_LOCATION="swedencentral"
-AZURE_SUBSCRIPTION_ID="<SUBSCRIPTION_ID>"
-CLIENT_USER_TOKEN_HEADER="x-client-user-token"
-ENABLE_CAPABILITY_HOST="false"
-ENABLE_HOSTED_AGENTS="true"
-ENABLE_SENSITIVE_DATA="true"
-FOUNDRY_PROJECT_ENDPOINT="https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project"
-GRAPH_SCOPES="[\"https://graph.microsoft.com/Files.Read\"]"
-KEY_VAULT_URL="https://mauromikeyvault01.vault.azure.net/"
+---
+
+## 6. Storing Secrets: Key Vault and Managed Identity
+
+**Should we store the secrets right next to the variables, in `.env`? No!** We use **Azure Key Vault + Managed Identity**. The standard pattern **decouples secret rotation from deployment**: the OBO client secret lives in the vault, the code reads it at runtime, and `azure.yaml` carries only non‑secret values.
+
+### The challenge — a different identity locally vs. in the container
+
+- **Locally**, access to the Key Vault happens by default through the **developer's credentials** stored via the CLI (`az login` / the user), because authentication uses `DefaultAzureCredential`. So if the user who ran `az login` has at least the **Key Vault Secrets User** RBAC role, they can read the secrets even from code running locally (executed by the CLI or by VS Code).
+- **In the Foundry container**, instead, `DefaultAzureCredential` uses the **container's managed identity**. We therefore need to retrieve the object ID of the identity that runs the agent and assign **it** the **Key Vault Secrets User** RBAC role.
+
+### Two planes that must be kept distinct
+
+Before the solution, one fundamental point: there are **two separate, independent planes** — the first is *"who gets in"*, the second is *"with which identity the agent presents itself to the outside"*.
+
+**1) Ingress — who can invoke the agent.** The caller (a user or a service principal) must hold the **Foundry User** role **on the project** (not on the agent). This governs invocation access.
+
+**2) Egress — with which identity the agent accesses remote resources.** The agent runs under its own **Agent Identity (Microsoft Entra Agent ID)**: a **per‑instance service principal**, distinct both from the caller and from the Foundry account's managed identity. Roles on resources (e.g. **Key Vault Secrets User**) are assigned to **this** identity.
+
+Two handy verification commands (post‑assignment):
+
+```bash
+# Identities that can invoke a Foundry Project (Foundry User role):
+PROJECT_SCOPE="/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account>/projects/<project>"
+az role assignment list --scope "$PROJECT_SCOPE" \
+  --query "[?roleDefinitionName=='Foundry User'].{principal:principalId, type:principalType}" -o table
+
+# Identities that can access the Key Vault resource:
+RES_SCOPE="/subscriptions/.../providers/Microsoft.KeyVault/vaults/<kv>"
+az role assignment list --scope "$RES_SCOPE" \
+  --query "[?principalType=='ServicePrincipal'].{principal:principalId, role:roleDefinitionName}" -o table
 ```
 
-**③ `azure.yaml` — variables made available inside the container**, resolved at deploy time from surface ②
+### Assigning **Foundry User** to a service principal (ingress)
 
-```yaml
-environmentVariables:
-  - name: KEY_VAULT_URL
-    value: ${KEY_VAULT_URL}
-  - name: APP_OBO_TENANT_ID
-    value: ${APP_OBO_TENANT_ID}
-  - name: APP_OBO_CLIENT_ID
-    value: ${APP_OBO_CLIENT_ID}
-  - name: APP_OBO_CLIENT_SECRET_NAME
-    value: ${APP_OBO_CLIENT_SECRET_NAME}
-  - name: GRAPH_SCOPES
-    value: ${GRAPH_SCOPES}
-  - name: AZURE_AI_MODEL_DEPLOYMENT_NAME
-    value: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
-  - name: CLIENT_USER_TOKEN_HEADER
-    value: ${CLIENT_USER_TOKEN_HEADER}
-  - name: AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING
-    value: ${AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING}
-  - name: ENABLE_SENSITIVE_DATA
-    value: ${ENABLE_SENSITIVE_DATA}
-```
+The following three screenshots show how to assign the **Foundry User** role to an *Entra ID registered application* — or, more precisely, to its **Service Principal** instance `svc-foundry-dataplane-access-dev`.
 
-### 5.4 Add `monitoring.py` and run `main.py` in debug
+First, note the application's **Application (client) ID** on the App registration blade:
+
+![Azure portal — App registration svc-foundry-dataplane-access-dev, Essentials. The Application (client) ID is highlighted (b0cc68f2-87d7-491d-8cc2-…), alongside the Object ID and the Directory (tenant) ID.](images/04-assign-foundry-user-sp-app-registration.png)
+
+The same application also appears as an **Enterprise Application** (its Service Principal), with a matching Application ID:
+
+![Azure portal — Enterprise Application svc-foundry-dataplane-access-dev, Properties: Name, the highlighted Application ID (b0cc68f2-87d7-491d-8cc2-…), and the Object ID.](images/05-assign-foundry-user-sp-enterprise-app.png)
+
+Then, on the **Foundry project's** Access control (IAM) → Role assignments, we grant that service principal the **Foundry User** role:
+
+![Azure portal — the aif7159-standard-agent-project Foundry project, Access control (IAM) → Role assignments, filtered by the client ID. Under "Foundry User (1)", the service principal svc-foundry-dataplane-access-dev is listed as the assignee.](images/06-foundry-user-role-assignment.png)
+
+### Assigning **Key Vault Secrets User** to the Agent Identity (egress)
+
+The next two screenshots show how to retrieve the **agent's identity** inside the Foundry portal → select the agent, open **Details**, and read the **Entra agent identity** ID. That ID is then added to the **Key Vault** IAM with the **Key Vault Secrets User** role.
+
+![Microsoft Foundry portal — agent hello-world-python-responses (Version 1, Running), Details tab. Under "Identity & access", the "Entra agent identity" ID is highlighted (3bd77741-37f0-40d…), together with the "Entra agent blueprint" ID.](images/07-agent-identity-foundry-portal.png)
+
+![Azure portal — Key Vault mauromikeyvault01, Access control (IAM), role assignments grouped by role. Under "Key Vault Secrets User (2)" the agent's service principal (foundry7159-aif7159-standard-agent-project-hell…) is listed with the ID 3bd77741-37f0-40d2-af6c-7cbfb2780288 — matching the Entra agent identity from the previous screenshot.](images/08-keyvault-iam-agent-identity.png)
+
+### Summary
+
+| Needed for… | Correct identity | How to obtain it |
+|---|---|---|
+| **Invoking** the agent | the caller, with **Foundry User** on the project | `az role assignment list` on the project scope |
+| The agent **accessing a resource** | the **Agent Identity** (per‑instance SP) | from the resource's role assignments / the Foundry portal / Microsoft Entra Agent ID |
+
+### Why Key Vault beats `.env`, and what's even better
+
+- **No redeploy on rotation:** rotate the secret in the Key Vault → the agent reads the updated value at the next `get_secret` (or on container restart). **No `azd deploy`.**
+- **Even better (remove the secret entirely):** for OBO you can use **Workload Identity Federation** — the app registration trusts the agent's managed identity, which obtains tokens **without a client secret**. **Zero secrets to rotate.** It is more setup but is the ideal long‑term approach (there is a dedicated skill, `entra-agent-id`).
+- **Library:** the only package to add to `requirements.txt` to access Key Vault programmatically is **`azure-keyvault-secrets`** (already added in [Chapter 5](#51-clone-the-sample)).
+
+### References
+
+- **Foundry RBAC** — roles and assignments on the project: <https://learn.microsoft.com/azure/ai-foundry/concepts/rbac-ai-foundry>
+- **Microsoft Entra Agent ID** — the Blueprint → BlueprintPrincipal → Agent Identity model, per‑identity permissions, and OBO / `fmi_path` token exchange: Microsoft Learn, search *"Microsoft Entra Agent ID"*.
+
+[↑ Back to top](#table-of-contents)
+
+---
+
+## 7. The Agent Code: monitoring.py and the Handler
+
+### 7.1 Add `monitoring.py` and run `main.py` in debug
 
 Add `monitoring.py`, import it in `main.py` (remembering that `load_dotenv()` is called inside `monitoring`), and launch `main.py` in debug.
 
@@ -431,9 +459,9 @@ Expected terminal output when the host starts:
 2026-07-06 00:22:51,593 INFO hypercorn.error: Running on http://0.0.0.0:8088 (CTRL + C to quit)
 ```
 
-### 5.5 The handler (bring‑your‑own Responses)
+### 7.2 The handler (bring‑your‑own Responses)
 
-The **key difference** compared to `azure-ai-agentserver-agentframework`: there, `from_agent_framework(agent)` did everything; **here we write the handler ourselves and call the model**. That is the price *and* the power of *bring‑your‑own* — and it gives us access to `context`, hence (soon) to the `x-client-*` headers.
+The **key difference** compared to `azure-ai-agentserver-agentframework`: there, `from_agent_framework(agent)` did everything; **here we write the handler ourselves and call the model**. That is the price *and* the power of *bring‑your‑own* — and it gives us access to `context`, hence to the `x-client-*` headers.
 
 ```python
 @app.response_handler
@@ -475,9 +503,15 @@ What each piece does:
 
 ---
 
-## 6. Testing the Hosted Agent Locally
+## 8. First Local Test of the Hosted Agent
 
-We test the `azure-ai-agentserver-responses` hosted agent. Notably, we are also able to pass the `x-client-user-token` parameter. True, we are local and it *could* behave differently once published — but, as we will see, it works as a hosted agent on Foundry too.
+We are ready for the first test of this `azure-ai-agentserver-responses` hosted agent. The procedure:
+
+1. Put a **breakpoint** in `main.py` on the line `user_input = await context.get_input_text() or "Hello!"`.
+2. Run the **first** REST request from `agent_via_responses_simple.http` — the one **without** `x-client-user-token`.
+3. Run the **second** REST request and verify the value in `context.client_headers["x-client-user-token"]`.
+
+True, we are local and it *could* behave differently once published — but, as we will see, it works as a hosted agent on Foundry too.
 
 Request file (`agent_via_responses_simple.http`):
 
@@ -494,13 +528,13 @@ x-client-user-token: aaa
 }
 ```
 
-In the debugger we can confirm that the handler receives the request input **and** the `x-client-user-token` header (here set to `aaa`), which lands in `user_assertion`:
+In the debugger we can confirm that the handler receives the request input **and** the `x-client-user-token` header (here set to `aaa`), visible under `context.client_headers`:
 
-![VS Code debugging main.py: execution paused inside the handler. The debug panels show request = {'input': 'What is a meaning function? Please answer...'} and user_assertion = 'aaa', proving the x-client-user-token header was received and read from context.client_headers.](images/04-handler-debug-user-assertion.png)
+![VS Code debugging main.py: execution paused at the breakpoint on the user_input line (line 69). The Variables panel expands context.client_headers and highlights 'x-client-user-token': '"aaa"', with request = {'input': 'What is a meaning function. Answer in…'} — proving the custom header reached the handler.](images/09-handler-debug-user-assertion.png)
 
 And the HTTP response comes back `200 OK` with the model's answer:
 
-![The HTTP Response (200). Headers include x-platform-server: azure-ai-agentserver-core/2.0.0b7 and azure-ai-agentserver-responses/1.0.0b8. The JSON body's output → content → output_text reads "Maps expressions to their referents or truth conditions." with status "completed".](images/05-local-test-response-200.png)
+![The HTTP Response (200). Headers include x-platform-server: azure-ai-agentserver-core/2.0.0b7 and azure-ai-agentserver-responses/1.0.0b8. The JSON body's output → content → output_text reads "Maps expressions to their referents or truth conditions." with status "completed".](images/10-local-test-response-200.png)
 
 ### How streaming works here
 
@@ -529,7 +563,33 @@ When we add MAF: `await agent.run(text)` → non‑streaming (returns the comple
 
 ---
 
-## 7. Adding a Dockerfile
+## 9. Adding a Dockerfile (Optional)
+
+In this context a Dockerfile is **not strictly needed**, because later we do a **code deployment**, not a **container deployment**. Still, it is useful to see and costs very little. The steps:
+
+1. **Duplicate `.env` into `.env.docker`** and add the last 3 lines, so Docker can authenticate to Foundry with a **service principal** that is a *Foundry User* of that project:
+
+   ```dotenv
+   AZURE_TENANT_ID=3ad0b905-34ab-4116-93d9-c1dcc2d35af6
+   AZURE_CLIENT_ID=b0cc68f2-87d7-491d-8cc2-60624256126e
+   AZURE_CLIENT_SECRET=4bp***
+   ```
+
+2. **Clean the environment** if needed:
+
+   ```bash
+   for id in $(docker images -aq); do docker rmi -f "$id"; done
+   for id in $(docker ps -aq); do docker rm -f "$id"; done
+   ```
+
+3. **Build the container and run it on port 8080** (mapping to the container's 8088):
+
+   ```bash
+   docker build -t hello-world-python-responses .
+   docker run --rm -p 8080:8088 --env-file .env.docker hello-world-python-responses
+   ```
+
+The `Dockerfile` itself:
 
 ```dockerfile
 FROM python:3.13-slim
@@ -555,13 +615,13 @@ EXPOSE 8088
 CMD ["python", "main.py"]
 ```
 
-> As we will see in [Chapter 11](#11-agent-provisioning-and-deployment), because we use **code deploy** (a `codeConfiguration` block in `azure.yaml`), this **Dockerfile is ignored** at deploy time — Foundry builds the image server‑side from `requirements.txt`. The `COPY` list here matters only for a **local** Docker build.
+> As we will see in [Chapter 13](#13-agent-provisioning-and-deployment), because we use **code deploy** (a `codeConfiguration` block in `azure.yaml`), this **Dockerfile is ignored** at deploy time — Foundry builds the image server‑side from `requirements.txt`. The `COPY` list here matters only for a **local** Docker build.
 
 [↑ Back to top](#table-of-contents)
 
 ---
 
-## 8. From "Responses" to "Responses + Agent Framework (MAF)"
+## 10. From "Responses" to "Responses + Agent Framework (MAF)"
 
 The downloaded project already works as‑is: the handler calls the Foundry model via the "raw" Responses API and returns the text. Now we transform it into the **MAF** version, which brings:
 
@@ -653,10 +713,10 @@ def _build_input(current_input: str, history: list) -> list[dict]:
 
 ### Modification 6 — Handler: a single call to the agent
 
-*Why:* `_agent.run()` is natively async (no `run_in_executor`) and encapsulates the LLM call plus any tool‑calling. You return `result.text`.
+*Why:* `_agent.run()` is natively async (no `run_in_executor`) and encapsulates the LLM call plus any tool‑calling. You return `result.text`. Keep the first line (`user_input = await context.get_input_text() or "Hello!"`) and replace the rest:
 
 ```python
-# before
+# before (keeping the first line)
 user_input = await context.get_input_text() or "Hello!"
 history = await context.get_history()
 input_items = _build_input(user_input, history)
@@ -683,7 +743,7 @@ return TextResponse(context, request, text=result.text)
 
 ---
 
-## 9. Real vs. Simulated Streaming
+## 11. Real vs. Simulated Streaming
 
 **Is this true streaming or simulated?** It is **simulated: full‑then‑deliver** — and for now we leave it as is.
 
@@ -718,14 +778,122 @@ Two changes are needed:
 
 ---
 
-## 10. Adding a Tool to the MAF Agent (Graph + OBO)
+## 12. Adding a Tool to the MAF Agent (Graph + OBO)
 
-To test **Microsoft Graph** engagement, we add a **tool** to the agent. MAF makes this extremely convenient: we define an async function and register it in the agent definition.
+To test **Microsoft Graph** engagement, we add a **tool** to the agent. MAF makes this extremely convenient.
+
+First we import the **`utils`** library, which contains the function `onedrive_root_folders(user_assertion: str)` — given the correct Graph‑scoped token via the `user_assertion` parameter, it returns the folders in the user's OneDrive root. In the imports we also add **`contextvars`**, which lets us store per‑session ("per‑request") globals.
+
+### The OBO subtlety: never pass the token as a parameter
+
+Clearly, somewhere the function will have to use the **user token** to access Graph via **OBO**. But that token **cannot** be passed as a tool parameter: the LLM that prepares the tool call **does not know it** (and rightly so — it is a secret). So we **inject the user assertion (Token C) into a `ContextVar`**, so the tool can read it on its own:
+
+```python
+from utils import onedrive_root_folders
+import contextvars
+
+# Per-request user assertion (Token C), exposed to tools via a ContextVar so it is
+# NOT an LLM-visible tool parameter. The handler sets it; the tool reads it.
+_current_user_assertion: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "current_user_assertion", default=""
+)
+```
+
+### The helper that calls Graph (`onedrive_root_folders`)
+
+Instead of implementing the Graph call inside the tool, we write a **helper function** and have the tool invoke it. Being internal and never called by the LLM, it can freely accept `user_assertion` **as a parameter**, because the tool passes it in after reading it from the `ContextVar`. This function does the **token exchange**: from **Token C** it derives **Token D**, the real bearer to Graph, with which it calls the Graph API.
+
+```python
+def onedrive_root_folders(user_assertion: str) -> list[dict]:
+    """OBO-exchange the user assertion (Token C) for a Microsoft Graph token,
+    then return the biggest folder in the user's OneDrive root.
+    Returns a human-readable string and never raises (any failure is reported
+    in the returned text)."""
+    scopes = ast.literal_eval(
+        os.environ.get("GRAPH_SCOPES", '["https://graph.microsoft.com/Files.Read"]')
+    )
+    token = token_exchange(user_assertion, scopes)  # Token D
+    if token.startswith("[graph]"):  # token_exchange returns an error string on failure
+        return token
+    try:
+        resp = requests.get(
+            GRAPH_ROOT_CHILDREN,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30,
+        )
+        if resp.status_code != 200:
+            return f"[graph] /me/drive/root/children -> {resp.status_code}: {resp.text[:300]}"
+        folders = [
+            {"name": it["name"], "size": it["size"], "childCount": it["folder"]["childCount"]}
+            for it in resp.json().get("value", [])
+            if "folder" in it
+        ]
+        if not folders:
+            return "No folders found in the OneDrive root."
+        return f"Here are the folders on your OneDrive root: {folders}"
+    except Exception as e:  # noqa: BLE001 - report any failure as text, never crash the tool
+        return f"[graph] error: {type(e).__name__}: {e}"
+```
+
+### The OBO token exchange (`token_exchange`)
+
+To call Graph, `onedrive_root_folders` needs a token with `aud="https://graph.microsoft.com/Files.Read"`. That token is obtained by **exchanging** the user assertion through a `ConfidentialClientApplication` that authenticates **silently** — no consent prompts — using its `APP_OBO_CLIENT_ID` and `APP_OBO_CLIENT_SECRET`:
+
+```python
+def token_exchange(user_assertion: str, scopes: list) -> str:
+    tenant_id = os.environ.get("APP_OBO_TENANT_ID")
+    client_id = os.environ.get("APP_OBO_CLIENT_ID")
+    client_secret = os.environ.get("APP_OBO_CLIENT_SECRET")
+    if not (tenant_id and client_id and client_secret):
+        return (
+            "[graph] OBO not configured "
+            "(set APP_OBO_TENANT_ID / APP_OBO_CLIENT_ID / APP_OBO_CLIENT_SECRET)"
+        )
+    # Token D: App-OBO (confidential client) exchanges Token C for a Graph token.
+    app = msal.ConfidentialClientApplication(
+        client_id,
+        client_credential=client_secret,
+        authority=f"https://login.microsoftonline.com/{tenant_id}",
+    )
+    result = app.acquire_token_on_behalf_of(user_assertion=user_assertion, scopes=scopes)
+    if "access_token" not in result:
+        return (
+            f"[graph] OBO failed: {result.get('error')}: "
+            f"{str(result.get('error_description', ''))[:300]}"
+        )
+    return result["access_token"]
+```
+
+The `APP_OBO_CLIENT_SECRET` is pulled from Key Vault via the `SecretClient` of the `azure.keyvault.secrets` library (see [Chapter 6](#6-storing-secrets-key-vault-and-managed-identity)):
+
+```python
+from azure.keyvault.secrets import SecretClient
+
+os.environ["APP_OBO_CLIENT_SECRET"] = SecretClient(
+    vault_url=os.environ["APP_OBO_CLIENT_SECRET_NAME_VAULT_URL"],
+    credential=DefaultAzureCredential(),
+).get_secret("APP_OBO_CLIENT_SECRET_NAME").value
+```
+
+### Registering the tool on the agent
+
+We leverage the flexibility of Agent Framework to add **tools** to the agent. Here the tool is simply the async function `onedrive_root_folders_async`, which calls the "real" `onedrive_root_folders`:
 
 ```python
 async def onedrive_root_folders_async() -> str:
-    ...
+    """Return the name and size of all folders in the signed-in user's OneDrive root.
+    Use ONLY for questions about the user's own OneDrive files or folders (e.g.
+    "what is the biggest folder in my OneDrive?")."""
+    assertion = _current_user_assertion.get()
+    if not assertion:
+        return "No user token is available, so I cannot access the user's OneDrive."
+    # token_exchange + Graph REST are blocking -> run off the event loop.
+    return await asyncio.to_thread(onedrive_root_folders, assertion)
+```
 
+Finally, we add `onedrive_root_folders_async` as a tool of the agent. When the agent's LLM deems it necessary, it has the framework invoke the function. If a tool had parameters, the **LLM** would fill them in; ours has none, but the principle is the same:
+
+```python
 _agent = Agent(
     _chat_client,            # 1st positional = client
     _SYSTEM_PROMPT,          # 2nd positional = instructions
@@ -734,60 +902,55 @@ _agent = Agent(
 )
 ```
 
-So, when the agent's LLM deems it necessary, it has the framework invoke the function. If a tool had parameters, the **LLM** would fill them in; ours has none, but the principle is the same.
-
-### The OBO subtlety: never pass the token as a parameter
-
-Clearly, somewhere the function will have to use the **user token** to access Graph via **OBO**. But that token **cannot** be passed as a parameter: the LLM that prepares the tool call **does not know it** (and rightly so — it is a secret).
-
-So we **inject the user assertion (Token C) into a `ContextVar`**, so the tool can read it on its own.
-
-Specifically, instead of implementing the Graph call inside the tool, we write a **helper function** and have the tool invoke it. For consistency we name it the same as the tool without the `_async` suffix (`onedrive_root_folders`); being internal and never called by the LLM, it can freely accept the user assertion **as a parameter**, because the tool passes it in after reading it from the `ContextVar`. The helper then performs the **OBO** (Token C → Token D, the real bearer to Graph) and calls the API.
-
 > The `ContextVar` is a **per‑request** variable: it prevents concurrent requests from overwriting each other, which would happen with a normal global variable.
 
 [↑ Back to top](#table-of-contents)
 
 ---
 
-## 11. Agent Provisioning and Deployment
+## 13. Agent Provisioning and Deployment
 
-### 11.1 The AZD environment
+### 13.1 The AZD environment
 
-An **`azd` environment** is a **named deployment profile**. It lives in `.azure/<name>/` at the project root (next to `azure.yaml`) and contains: subscription, region, and the `.env` file from which `azd` resolves the `${...}` placeholders. Normally `azd` creates it on the first `provision`/`up`, or you create it by hand with `azd env new`. **It has nothing to do with your code** — it is just the deploy state.
-
-When you run `azd env new`, nothing is duplicated: `azd env set` and `azd env get-values` are the same thing — the CLI interface to write/read that `.azure/<env>/.env` file. You could edit the file by hand with the same effect.
+Now that we have a working hosted agent, we create the **named deployment profile** — the `azd` **environment**. It lives in `.azure/<name>/` at the project root (next to `azure.yaml`) and contains: subscription, region, and the `.env` file from which `azd` resolves the `${...}` placeholders. Normally `azd` creates it on the first `provision`/`up`, or you create it by hand with `azd env new`. **It has nothing to do with your code** — it records only the deploy state.
 
 ```bash
-# 1. create the environment
-azd env new ha02-agentserverresponses-llmagent-dev
-
-# 2. set the 4 variables
-azd env set AZURE_AI_MODEL_DEPLOYMENT_NAME gpt-5.4-mini
-azd env set CLIENT_USER_TOKEN_HEADER x-client-user-token
-azd env set AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING true
-azd env set ENABLE_SENSITIVE_DATA true
-
-# 3. check
-azd env get-values
+# Create the environment
+azd env new hello-world-responses-dev
 ```
 
-![VS Code showing the .azure/ha02-agentserverresponses-llmagent-dev/ folder in the Explorer (.env, .env.lock, config.json) with the .env file open. It contains the five resolved variables: AZURE_AI_MODEL_DEPLOYMENT_NAME="gpt-5.4-mini", AZURE_ENV_NAME="ha02-agentserverresponses-llmagent-dev", AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING="true", CLIENT_USER_TOKEN_HEADER="x-client-user-token", ENABLE_SENSITIVE_DATA="true".](images/06-azd-environment-env.png)
+![VS Code Explorer for HELLO-WORLD-RESPONSES showing the .azure/ folder expanded: the newly created hello-world-responses-dev environment with .env, .env.lock, config.json, and .gitignore, alongside src/hello-world-python-responses.](images/11-azd-environment-created.png)
 
 > ⚠️ **Do not confuse** this with a possible `.env` in the project root (the one `load_dotenv()` uses in `monitoring.py` for the local `python main.py` run): that is a **different** file, for a **different** purpose. The one under `.azure/…/` belongs only to `azd`.
 
-### 11.2 Container environment variables
+### 13.2 Container environment variables
 
-The `environmentVariables` section of the agent's service declares **which environment variables the hosting container will receive**. Each entry has the form `name` / `value`. At provision/deploy time, `azd` resolves it by reading the value from the **active environment** (`.azure/<environment>/.env`, populated with `azd env set`). The resolved value is then injected as an environment variable into the agent's container.
+In the ["variables for running the agent"](#53-variables-for-running-the-agent-the-env-file) section we saw the agent needs **11 variables**. We also anticipated that the hosted agent on Foundry needs **two fewer** — `FOUNDRY_PROJECT_ENDPOINT` and `APPLICATIONINSIGHTS_CONNECTION_STRING` — because they are **auto‑injected by the Foundry runtime**, so it is **9 instead of 11**.
 
-It follows that `azure.yaml` **assumes those variables exist** in the selected environment: if one is missing, `${NAME}` resolves to an **empty string** and the container starts with that variable unset. Switching environment (e.g. dev → prod), the same `${NAME}` references pull different values, without touching `azure.yaml`.
+The variables to inject into the container at deployment are declared in the `environmentVariables` section of `azure.yaml`, which therefore contains only **9** variables (the other 2 are injected by the Foundry runtime). For the CLI to find the values to inject during `azd deploy`, the CLI environment running `azd` must have them available — which is why they live in the environment's own `.env` under `.azure/<env_name>/`.
 
-**Exception:** `FOUNDRY_PROJECT_ENDPOINT` and `APPLICATIONINSIGHTS_CONNECTION_STRING` are **not** declared here, because the hosting platform injects them automatically at runtime (locally, `azd` provides them). They must be left **out** of the `environmentVariables` section.
+Note that this environment `.env` **does** contain `FOUNDRY_PROJECT_ENDPOINT` — not because the value must be injected into the container, but because the `azd` CLI must know **where** the Foundry project is, in order to publish the agent. Counting that one, the environment `.env` holds **7 extra** variables beyond the 9 that go into the container.
+
+`azure.yaml` **assumes** those variables exist in the selected environment: if one is missing, `${NAME}` resolves to an **empty string** and the container starts with that variable unset. Switching environment (e.g. dev → prod), the same `${NAME}` references pull different values, without touching `azure.yaml`. Values can be written directly in the `.env`, or set with `azd env set X y` (which writes into `.azure/<env>/.env`); `azd env get-values` reads them back.
+
+**The three surfaces, side by side:**
+
+**① Project `.env` — 11 variables used to run the agent** (see [5.3](#53-variables-for-running-the-agent-the-env-file)).
+
+**② `azure.yaml` — 9 variables made available inside the container**, resolved at deploy time from surface ③:
 
 ```yaml
 environmentVariables:
-  # FOUNDRY_PROJECT_ENDPOINT and APPLICATIONINSIGHTS_CONNECTION_STRING are
-  # injected automatically by the hosting platform — do NOT declare them here.
+  - name: KEY_VAULT_URL
+    value: ${KEY_VAULT_URL}
+  - name: APP_OBO_TENANT_ID
+    value: ${APP_OBO_TENANT_ID}
+  - name: APP_OBO_CLIENT_ID
+    value: ${APP_OBO_CLIENT_ID}
+  - name: APP_OBO_CLIENT_SECRET_NAME
+    value: ${APP_OBO_CLIENT_SECRET_NAME}
+  - name: GRAPH_SCOPES
+    value: ${GRAPH_SCOPES}
   - name: AZURE_AI_MODEL_DEPLOYMENT_NAME
     value: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
   - name: CLIENT_USER_TOKEN_HEADER
@@ -798,79 +961,49 @@ environmentVariables:
     value: ${ENABLE_SENSITIVE_DATA}
 ```
 
+**③ Environment `.env` (`.azure/<env>/.env`) — 16 variables** (the 9 for the container + 7 for the CLI/provisioning):
+
+```dotenv
+APP_OBO_CLIENT_ID="3a0fad96-b026-4f5f-914a-fc6348656f6b"
+APP_OBO_CLIENT_SECRET_NAME="APP-OBO-CLIENT-SECRET"
+APP_OBO_TENANT_ID="3ad0b905-34ab-4116-93d9-c1dcc2d35af6"
+AZURE_AI_MODEL_DEPLOYMENT_NAME="gpt-5.4-mini"
+AZURE_AI_PROJECT_ID="/subscriptions/eca2eddb-0f0c-4351-a634-52751499eeea/resourceGroups/rg-aifoundry7159/providers/Microsoft.CognitiveServices/accounts/foundry7159/projects/aif7159-standard-agent-project"
+AZURE_ENV_NAME="hello-world-python-responses"
+AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING="true"
+AZURE_LOCATION="swedencentral"
+AZURE_SUBSCRIPTION_ID="eca2eddb-0f0c-4351-a634-52751499eeea"
+CLIENT_USER_TOKEN_HEADER="x-client-user-token"
+ENABLE_CAPABILITY_HOST="false"
+ENABLE_HOSTED_AGENTS="true"
+ENABLE_SENSITIVE_DATA="true"
+FOUNDRY_PROJECT_ENDPOINT="https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project"
+GRAPH_SCOPES="[\"https://graph.microsoft.com/Files.Read\"]"
+KEY_VAULT_URL="https://mauromikeyvault01.vault.azure.net/"
+```
+
 > One technical clarification: the `${...}` resolution happens on the `azd` side, on our machine; the container receives the **final values**, not the placeholders.
 
-### 11.3 Installing extensions in AZD
+### 13.3 Installing extensions in AZD
 
 When we install `microsoft.foundry`, `azd` automatically pulls in all its Foundry dependencies (projects, connections, inspector, routines, skills, toolboxes). So `microsoft.foundry` is effectively the **meta‑package** that bundles everything.
 
-![Terminal output of `azd extension list`, listing the Foundry extensions and their status: azure.ai.agents "Foundry agents (Beta)" 1.0.0-beta.4 (Up to date), azure.ai.connections, azure.ai.inspector, azure.ai.projects, azure.ai.routines, azure.ai.skills, azure.ai.toolboxes, and microsoft.foundry "Microsoft Foundry (Beta)" 1.0.0-beta.1 (Up to date), among others.](images/07-azd-extension-list.png)
+![Terminal output of `azd extension list` (run from /tmp/hello-world-responses), listing the Foundry extensions and their status: azure.ai.agents "Foundry agents (Beta)" 1.0.0-beta.4 (Up to date), azure.ai.connections, azure.ai.inspector, azure.ai.projects, azure.ai.routines, azure.ai.skills, azure.ai.toolboxes, and microsoft.foundry "Microsoft Foundry (Beta)" 1.0.0-beta.1 (Up to date), among others.](images/12-azd-extension-list.png)
 
-### 11.4 Provisioning: one rule to keep in mind
+### 13.4 Do we provision? It depends…
 
 > **`azure.yaml` = WHAT I deploy. The `azd` environment = WHERE I deploy it.** The "where" is never in `azure.yaml`: it lives in the environment.
 
-All these commands run from the same root folder that contains `azure.yaml`, `.azure`, and `main.py`. There are **two orthogonal, independent choices** (hence 4 possible combinations):
+Whether to run `azd provision` depends on the target project:
 
-1. Create a **new environment** (`azd env new <name>`) or use an **existing** one (`azd env select <name>`) — represented by a folder under `.azure/<name>` containing `.env`, `.env.lock`, `config.json`.
-2. Create a **new Foundry project** or use an **existing** one.
+| Scenario | Commands |
+|---|---|
+| **Deploy into a NEW project** | `azd provision` (creates account + project + model) → `azd deploy` |
+| **Deploy into an EXISTING project** | *skip provision* → set `FOUNDRY_PROJECT_ENDPOINT` + `AZURE_AI_PROJECT_ID` → `azd deploy` |
 
-#### (a) NEW Foundry project — `azd` creates everything
+If we choose the **new‑project** path, `azd provision` creates everything and reports success:
 
-```bash
-# create environment and variables
-azd env new <env-name>
-azd env set APP_OBO_CLIENT_ID "<APP_OBO_CLIENT_ID>"
-azd env set APP_OBO_CLIENT_SECRET_NAME "APP-OBO-CLIENT-SECRET"
-azd env set APP_OBO_TENANT_ID "<APP_OBO_TENANT_ID>"
-azd env set AZURE_AI_MODEL_DEPLOYMENT_NAME "gpt-5.4-mini"
-azd env set AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING "true"
-azd env set ENABLE_SENSITIVE_DATA "true"
-azd env set CLIENT_USER_TOKEN_HEADER "x-client-user-token"
-azd env set GRAPH_SCOPES "[\"https://graph.microsoft.com/Files.Read\"]"
-azd env set KEY_VAULT_URL "https://mauromikeyvault01.vault.azure.net/"
-
-# provisioning
-azd provision   # asks subscription + region, CREATES project + model + infra
-
-# deployment
-azd deploy      # publishes the agent into the new Foundry project
-```
-
-#### (b) EXISTING Foundry project — `azd` adopts it, NO provision
-
-```bash
-# create environment and variables — exactly as for the "new project" case
-azd env new <env-name>
-azd env set APP_OBO_CLIENT_ID "<APP_OBO_CLIENT_ID>"
-azd env set APP_OBO_CLIENT_SECRET_NAME "APP-OBO-CLIENT-SECRET"
-azd env set APP_OBO_TENANT_ID "<APP_OBO_TENANT_ID>"
-azd env set AZURE_AI_MODEL_DEPLOYMENT_NAME "gpt-5.4-mini"
-azd env set AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING "true"
-azd env set ENABLE_SENSITIVE_DATA "true"
-azd env set CLIENT_USER_TOKEN_HEADER "x-client-user-token"
-azd env set GRAPH_SCOPES "[\"https://graph.microsoft.com/Files.Read\"]"
-azd env set KEY_VAULT_URL "https://mauromikeyvault01.vault.azure.net/"
-
-# specify the existing project
-azd env set AZURE_SUBSCRIPTION_ID "<SUBSCRIPTION_ID>"
-azd env set FOUNDRY_PROJECT_ENDPOINT "https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project"
-azd env set AZURE_AI_PROJECT_ID "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/rg-aifoundry7159/providers/Microsoft.CognitiveServices/accounts/foundry7159/projects/aif7159-standard-agent-project"
-azd env set AZURE_LOCATION swedencentral
-
-# NO provisioning
-# deployment
-azd deploy      # publishes the agent INTO the existing project
-```
-
-Note the **two variables, side by side**:
-
-| Variable | What it is (format) | Who uses it |
-|---|---|---|
-| `FOUNDRY_PROJECT_ENDPOINT` | URL → `https://foundry7159…/projects/…` | `azd ai project show`, to resolve the project |
-| `AZURE_AI_PROJECT_ID` | ARM ID → `/subscriptions/…/projects/…` | `azd deploy`, which requires it explicitly |
-
-Different formats, different consumers → **both are needed**. Plus `AZURE_SUBSCRIPTION_ID`.
+![Terminal output of `azd provision` from /tmp/hello-world-responses. Subscription: MngEnvMCAP883652-mauromi; Location: Sweden Central. "SUCCESS: Your application was provisioned in Azure in 1 minute 12 seconds." with a link to the rg-aifoundry7159 resource group in the Azure Portal.](images/13-azd-provision-success.png)
 
 **Practical consideration — the environment remembers what it contains.** If we reuse an existing environment, we carry over the values already written in its `.env` (subscription, endpoint, output of a previous deploy). So:
 
@@ -879,16 +1012,38 @@ Different formats, different consumers → **both are needed**. Plus `AZURE_SUBS
 
 > The healthy rule is: **one environment ≈ one deploy target.** Don't mix two different targets in the same environment, to avoid confusion from residual values.
 
-### 11.5 What happens when we run `azd deploy`?
+Regardless of whether we provisioned, the environment's `.env` must be filled in, for example:
 
-1. **`azd deploy` ties `azure.yaml` + environment together.** It reads `azure.yaml` (the *what*: the service, `codeConfiguration`, the `environmentVariables`), takes the active environment (`.azure/<env>/.env`: the *where* + the `${...}` values), resolves the placeholders, and publishes to the target. Yes, it merges them for you.
-2. **How it picks the files: NOT from the Dockerfile.** We are using **code deploy** (`codeConfiguration` in `azure.yaml`), so the **Dockerfile is ignored**. The mechanism is different: `azd` takes the service folder (`project: .`) and **zips it entirely**; excludes what is listed in `.agentignore` (`.gitignore`‑style syntax); uploads the ZIP; **Foundry builds the image server‑side**, installs from `requirements.txt`, and runs `entryPoint: main.py`.
+```dotenv
+APP_OBO_CLIENT_ID="3a0fad96-b026-4f5f-914a-fc6348656f6b"
+APP_OBO_CLIENT_SECRET_NAME="APP-OBO-CLIENT-SECRET"
+APP_OBO_TENANT_ID="3ad0b905-34ab-4116-93d9-c1dcc2d35af6"
+AZURE_AI_ACCOUNT_NAME="foundry7159"
+AZURE_AI_MODEL_DEPLOYMENT_NAME="gpt-5.4-mini"
+AZURE_AI_PROJECT_ID="/subscriptions/eca2eddb-0f0c-4351-a634-52751499eeea/resourceGroups/rg-aifoundry7159/providers/Microsoft.CognitiveServices/accounts/foundry7159/projects/aif7159-standard-agent-project"
+AZURE_AI_PROJECT_NAME="aif7159-standard-agent-project"
+AZURE_ENV_NAME="hello-world-responses-dev"
+AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING="true"
+AZURE_LOCATION="swedencentral"
+AZURE_OPENAI_ENDPOINT="https://foundry7159.openai.azure.com/"
+AZURE_RESOURCE_GROUP="rg-aifoundry7159"
+AZURE_SUBSCRIPTION_ID="eca2eddb-0f0c-4351-a634-52751499eeea"
+AZURE_TENANT_ID="3ad0b905-34ab-4116-93d9-c1dcc2d35af6"
+CLIENT_USER_TOKEN_HEADER="x-client-user-token"
+ENABLE_HOSTED_AGENTS="true"
+ENABLE_SENSITIVE_DATA="true"
+FOUNDRY_PROJECT_ENDPOINT="https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project"
+GRAPH_SCOPES="[\"https://graph.microsoft.com/Files.Read\"]"
+KEY_VAULT_URL="https://mauromikeyvault01.vault.azure.net/"
+```
 
-So `main.py`, `monitoring.py`, `utils.py`, `requirements.txt` end up in the package because they are **in the folder**, not because they are in the Dockerfile's `COPY`. The Dockerfile's `COPY` list matters only for a **local** Docker build.
+### 13.5 And now — Deployment!
 
-#### ⚠️ We are missing `.agentignore` — a serious problem
+**1. Verify the environment `.env`** (above).
 
-Because `project: .` zips the **entire** folder and this project was born with the old flow (without `.agentignore`), **without that file `azd` would also package** `.venv`, `__pycache__`, and — above all — `.azure`, which contains your **secrets**. So creating this file is **indispensable**:
+**2–3. Verify `.agentignore` and `.azdignore` (in the root).** Because `project: .` zips the **entire** folder and this project was born with the old flow (without an ignore file), **without them** `azd` would also package `.venv`, `__pycache__`, and — above all — `.azure`, which contains your **secrets**. So creating these files is **indispensable**. `.agentignore` is read by the **agents extension's code deploy**; `.azdignore` is used by **`azd` core** (special cases, traditional deployment). We keep them **identical**, so that whichever mechanism actually runs, we always package the same set.
+
+`.agentignore` (root):
 
 ```gitignore
 # Allowlist model: exclude everything, then re-include ONLY what the agent
@@ -903,11 +1058,30 @@ Because `project: .` zips the **entire** folder and this project was born with t
 !requirements.txt
 ```
 
+`.azdignore` (root) — identical:
+
+```gitignore
+# Allowlist model: exclude everything, then re-include ONLY what the agent
+# needs at runtime. This mirrors the COPY set of the Dockerfile
+# (requirements.txt + main.py + utils.py + monitoring.py).
+#
+# To add a runtime file, add another `!<file>` line below.
+/*
+!main.py
+!monitoring.py
+!utils.py
+!requirements.txt
+```
+
+**4. `azd deploy` ties `azure.yaml` + environment together.** It reads `azure.yaml` (the *what*: the service, `codeConfiguration`, the `environmentVariables`), takes the active environment (`.azure/<env>/.env`: the *where* + the `${...}` values), resolves the placeholders, and publishes to the target.
+
+**5. How it picks the files: NOT from the Dockerfile.** We are using **code deploy** (`codeConfiguration` in `azure.yaml`), so the **Dockerfile is ignored**. The mechanism is different: `azd` takes the service folder (`project: .`) and **zips it entirely**; excludes what is listed in `.agentignore`; uploads the ZIP; **Foundry builds the image server‑side**, installs from `requirements.txt`, and runs `entryPoint: main.py`. So `main.py`, `monitoring.py`, `utils.py`, `requirements.txt` end up in the package because they are **in the folder**, not because they are in the Dockerfile's `COPY`.
+
 #### Deploy method: Code or Docker Container?
 
 The method (code vs. container) is decided by the presence of `codeConfiguration` in `azure.yaml`, **not** by the Dockerfile:
 
-- **Code deploy:** activates automatically when we have (as here) the `codeConfiguration` branch in `azure.yaml`:
+- **Code deploy:** activates automatically when we have (as here) the `codeConfiguration` branch:
 
   ```yaml
   codeConfiguration:
@@ -919,11 +1093,53 @@ The method (code vs. container) is decided by the presence of `codeConfiguration
 
 > If one day you see `Packaging container` in the logs while expecting a code deploy, it means `azd` took the container path by mistake → check that `codeConfiguration` is present and correctly written.
 
-#### `.agentignore` vs. `.azdignore`
+#### Is `requirements.txt` a convention?
 
-`.agentignore` is read by the **agents extension's code deploy**; `.azdignore` is used by **`azd` core**. We keep them **identical**, so that whichever mechanism actually runs, we always package the same set.
+With a Dockerfile you explicitly run `pip install -r requirements.txt`. Here, `runtime: python_3_13` tells the remote build "this is a Python app". The builder (buildpack / Oryx style) then scans the folder for the standard Python dependency filenames, in precedence order: `requirements.txt` → `pip install -r requirements.txt`; `pyproject.toml` (+ lock) → install via PEP 517/uv/poetry; `setup.py` / `Pipfile` … It finds `requirements.txt` → uses it. `entryPoint: main.py` tells it what to start. Neither is "hand‑configured" toward a specific file — they are canonical names recognized by convention. With your allowlist you expose only `requirements.txt` → deterministic. Exposing both `requirements.txt` and `pyproject.toml` would invoke the builder's precedence (usually `requirements.txt` wins, but it depends) → potential ambiguity; keeping only `requirements.txt` is more predictable.
 
-### 11.6 Python packages and dependencies
+#### Run the deployment
+
+In our case we do **not** provision, because we use the **existing** Foundry project. A quick status check first, then deploy:
+
+```bash
+# confirm project endpoint + the variables
+azd env get-values
+
+# must see your existing project
+azd ai project show --output json
+```
+
+```json
+{
+  "endpoint": "https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project",
+  "source": "azdEnv",
+  "sourceDetail": "azd env",
+  "azdEnv": "hello-world-responses-dev"
+}
+```
+
+```bash
+azd deploy
+```
+
+Deployment output — both services report **Done**, and `azd` prints the Playground portal URL and the Responses endpoint:
+
+![Terminal output of `azd deploy`. "Deploying services (azd deploy)": ai-project → Done (2s), hello-world-python-responses → Done (1m23s). It prints the Agent playground (portal) URL, the Agent endpoint (responses), and the "Next" hints (azd ai agent show / invoke hello-world-python-responses). Final line: "SUCCESS: Your application was deployed to Azure in 1 minute 23 seconds."](images/14-azd-deploy-success.png)
+
+#### What the deploy adds to the environment `.env`
+
+After `azd deploy`, the environment `.env` gains the published agent's endpoints, name, version, and the resolved model deployment (`AGENT_HELLO_WORLD_PYTHON_RESPONSES_*` and `AI_PROJECT_DEPLOYMENTS`):
+
+```dotenv
+# ── added after the deployment ──
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_ENDPOINT="https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project/agents/hello-world-python-responses/versions/1"
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_NAME="hello-world-python-responses"
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_RESPONSES_ENDPOINT="https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project/agents/hello-world-python-responses/endpoint/protocols/openai/responses?api-version=v1"
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_VERSION=1
+AI_PROJECT_DEPLOYMENTS="[{\"name\":\"gpt-5.4-mini\",\"model\":{\"name\":\"gpt-5.4-mini\",\"format\":\"OpenAI\",\"version\":\"2026-03-17\"},\"sku\":{\"name\":\"GlobalStandard\",\"capacity\":10}}]"
+```
+
+### 13.6 Python packages and dependencies
 
 **Basic principle.** `requirements.txt` is the input we manage by hand. The same file is used in two moments:
 
@@ -989,49 +1205,9 @@ uv sync --active --prerelease=allow
 deactivate
 ```
 
-**What extra is needed for the deploy (beyond the local install)?** Nothing specific. `azd deploy` sends the same `requirements.txt` to the container build, which installs it with `pip`. You do not maintain a separate file for the deploy. The only two conditions for the remote build to succeed are the two rules above: specific sub‑packages (no `agent-framework` meta); no comments in the file.
-
 > If one day a package installs locally with `uv` but fails in the build with `pip`, the cause is almost always a package `pip` cannot fetch (like `hyperlight-sandbox-backend-wasm`): the fix is to not depend on the meta and declare only the sub‑packages you actually use.
 
-### 11.7 Run the deployment
-
-In our case we do **not** want to provision, because we want to use the **existing** Foundry project. A quick status check first, then deploy:
-
-```bash
-# confirm project endpoint + the variables
-azd env get-values
-
-# must see your existing project
-azd ai project show --output json
-```
-
-```json
-{
-  "endpoint": "https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project",
-  "source": "azdEnv",
-  "sourceDetail": "azd env",
-  "azdEnv": "ha02-agentserverresponses-llmagent-dev"
-}
-```
-
-```bash
-azd deploy
-```
-
-Deployment output — both services report **Done**, and `azd` prints the Playground portal URL and the Responses endpoint:
-
-![Terminal output of `azd deploy`. "Deploying services (azd deploy)": ai-project → Done (3s), ha02-agentserverresponses-llmagent → Done (1m14s). It prints the Agent playground (portal) URL, the Agent endpoint (responses), and the "Next" hints (azd ai agent show / invoke). Final line: "SUCCESS: Your application was deployed to Azure in 1 minute 14 seconds."](images/08-azd-deploy-success.png)
-
-The environment now records the published agent's endpoints and version:
-
-```text
-AGENT_HA02_AGENTSERVERRESPONSES_LLMAGENT_ENDPOINT="https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project/agents/ha02-agentserverresponses-llmagent/versions/2"
-AGENT_HA02_AGENTSERVERRESPONSES_LLMAGENT_NAME="ha02-agentserverresponses-llmagent"
-AGENT_HA02_AGENTSERVERRESPONSES_LLMAGENT_RESPONSES_ENDPOINT="https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project/agents/ha02-agentserverresponses-llmagent/endpoint/protocols/openai/responses?api-version=v1"
-AGENT_HA02_AGENTSERVERRESPONSES_LLMAGENT_VERSION=2
-```
-
-### 11.8 What if I need to re‑deploy?
+### 13.7 What if I need to re‑deploy?
 
 Suppose we changed the code, or `requirements.txt`, or even just the project's `.env`. The short answer is: **`azd deploy` for almost everything.** But it depends on what changed:
 
@@ -1075,33 +1251,4 @@ azd deploy
 
 ---
 
-## 12. Where Do We Keep the Secrets?
-
-### Correct solution: Azure Key Vault + Managed Identity
-
-The standard pattern that **decouples rotation from deployment**:
-
-1. Store `APP_OBO_CLIENT_SECRET` in a **Key Vault**.
-2. Give the agent's **managed identity** (the one that already uses `DefaultAzureCredential` and has *Cognitive Services User* on the project) the role **Key Vault Secrets User** on the vault.
-3. In code, read the secret **at runtime** (not from an env var).
-4. In `azure.yaml`, pass only **non‑secret** values.
-
-**No redeploy on rotation:** rotate the secret in the Key Vault → the agent reads the updated value at the next `get_secret` (or on container restart). **No `azd deploy`.** That is why Key Vault beats the `.env`.
-
-### Even better (if you want to eliminate the secret entirely)
-
-For OBO we can use **Workload Identity Federation**: the app registration trusts the agent's managed identity, which obtains tokens **without a client secret**. **Zero secrets to rotate.** It is more setup but it is the ideal long‑term approach — there is a dedicated skill (`entra-agent-id`).
-
-### Required addition to `requirements.txt`
-
-To read from Key Vault you need the library:
-
-```text
-azure-keyvault-secrets
-```
-
-[↑ Back to top](#table-of-contents)
-
----
-
-*Document generated from the source Word document “Microsoft Foundry Hosted Agents.docx”, translated from Italian to English and reorganized into chapters for publication. All screenshots are the original captures from the source document.*
+*Document generated from the source Word document “2026-07-10-B Microsoft Foundry Hosted Agents.docx”, translated from Italian to English and reorganized into chapters for publication. All screenshots are the original captures from the source document.*
