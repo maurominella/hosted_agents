@@ -16,7 +16,6 @@ from agent_framework import Agent
 from agent_framework_foundry import FoundryChatClient
 
 from azure.identity import DefaultAzureCredential
-from azure.keyvault.secrets import SecretClient
 
 from azure.ai.agentserver.responses import (
     CreateResponse,
@@ -25,17 +24,11 @@ from azure.ai.agentserver.responses import (
     ResponsesServerOptions,
     TextResponse,
 )
-
-
 # my own utility functions
 from utils import onedrive_root_folders
 
 logger.info("Agent starts")
 
-_kv = SecretClient(vault_url=os.environ["KEY_VAULT_URL"], credential=DefaultAzureCredential())
-
-# Retrieve the APP_OBO_CLIENT_SECRET from Azure Key Vault and set it in the environment variable
-os.environ["APP_OBO_CLIENT_SECRET"]=_kv.get_secret(os.environ["APP_OBO_CLIENT_SECRET_NAME"]).value
 
 _SYSTEM_PROMPT = (
     "You are a helpful AI assistant. Be concise and informative. "
