@@ -6,15 +6,15 @@ Forwards user input to a Foundry model via the Responses API and streams
 the reply back through the Responses protocol. See README.md for setup.
 """
 
-from monitoring import logger # this has to stay here so that the Azure Monitor setup in init.py runs before any other imports
-import asyncio
-import os
-import contextvars
+from monitoring import logger
 
-# Microsoft Agent Framework (MAF) and Foundry libraries
 from agent_framework import Agent
 from agent_framework_foundry import FoundryChatClient
 
+import asyncio
+import os
+
+from azure.ai.projects import AIProjectClient
 from azure.identity import DefaultAzureCredential
 
 from azure.ai.agentserver.responses import (
@@ -24,34 +24,29 @@ from azure.ai.agentserver.responses import (
     ResponsesServerOptions,
     TextResponse,
 )
-# my own utility functions
+
 from utils import onedrive_root_folders
-
-logger.info("Agent starts")
-
-
-_SYSTEM_PROMPT = (
-    "You are a helpful AI assistant. Be concise and informative. "
-    "When the user asks about their own OneDrive files or folders, use the available tool."
-)
-maf_agent_name = "BYO Responses Agent" # this is the MAF agent created within the hosted agent
-
-_endpoint = os.environ["FOUNDRY_PROJECT_ENDPOINT"]
-_model = os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"]
-
-
-# Agent Framework Client is a wrapper around the Foundry ChatClient that implements the Responses protocol.
-_chat_client = FoundryChatClient(
-    project_endpoint=_endpoint,
-    model=_model,
-    credential=DefaultAzureCredential(),
-)
+import contextvars
 
 # Per-request user assertion (Token C), exposed to tools via a ContextVar so it is
 # NOT an LLM-visible tool parameter. The handler sets it; the tool reads it.
 _current_user_assertion: contextvars.ContextVar[str] = contextvars.ContextVar(
     "current_user_assertion", default=""
 )
+
+from azure.keyvault.secrets import SecretClient
+
+os.environ["APP_OBO_CLIENT_SECRET"] = SecretClient(
+    vault_url=os.environ["KEY_VAULT_URL"],
+    credential=DefaultAzureCredential()
+).get_secret(os.environ["APP_OBO_CLIENT_SECRET_NAME"]).value
+
+
+_endpoint = os.environ["FOUNDRY_PROJECT_ENDPOINT"]
+_model = os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"]
+
+
+_SYSTEM_PROMPT = "You are a helpful AI assistant. Be concise and informative."
 
 
 async def onedrive_root_folders_async() -> str:
@@ -64,12 +59,16 @@ async def onedrive_root_folders_async() -> str:
     # token_exchange + Graph REST are blocking -> run off the event loop.
     return await asyncio.to_thread(onedrive_root_folders, assertion)
 
-
+_chat_client = FoundryChatClient(
+    project_endpoint=_endpoint,
+    model=_model,
+    credential=DefaultAzureCredential(),
+)
 _agent = Agent(
-    _chat_client,            # 1º positional = client
-    _SYSTEM_PROMPT,          # 2º positional = instructions
-    name=maf_agent_name,
-    tools=[onedrive_root_folders_async],
+    _chat_client,        # 1º posizionale = client
+    _SYSTEM_PROMPT,      # 2º posizionale = instructions
+    name="BYO Responses Agent",
+    tools=[onedrive_root_folders_async],   # <-- qui aggiugiamo i tool MAF
 )
 
 app = ResponsesAgentServerHost(
@@ -84,13 +83,14 @@ async def handler(
     _cancellation_signal: asyncio.Event,
 ):
     """Forward user input to the model with conversation history."""
-    user_assertion = context.client_headers.get(os.environ["CLIENT_USER_TOKEN_HEADER"], "")
-    logger.info("User assertion present: %s (len=%d)", bool(user_assertion), len(user_assertion))
-    _current_user_assertion.set(user_assertion)   # make Token C available to the OneDrive tool
     user_input = await context.get_input_text() or "Hello!"
-
+    user_assertion = context.client_headers.get(os.environ["CLIENT_USER_TOKEN_HEADER"], "")
+    logger.info(f"User assertion received. Length: {len(user_assertion)}.")
+    _current_user_assertion.set(user_assertion)
     result = await _agent.run(user_input)
     return TextResponse(context, request, text=result.text)
+
+
 
 
 app.run()

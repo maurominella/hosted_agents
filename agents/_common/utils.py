@@ -1,4 +1,3 @@
-
 import os
 import ast
 import msal       # On-Behalf-Of token exchange (Token C -> Microsoft Graph token)
@@ -8,7 +7,6 @@ GRAPH_ROOT_CHILDREN = (
     "https://graph.microsoft.com/v1.0/me/drive/root/children"
     "?$select=name,size,folder&$top=200"
 )
-
 
 def token_exchange(user_assertion: str, scopes:list) -> str:
     tenant_id = os.environ.get("APP_OBO_TENANT_ID")

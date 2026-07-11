@@ -1,0 +1,16 @@
+[project]
+name = "hello-world-python-responses"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "agent-framework-core==1.10.0",
+    "agent-framework-foundry==1.0.1",
+    "azure-ai-agentserver-responses==1.0.0b8",
+    "azure-ai-projects==2.0.1",
+    "azure-identity==1.25.3",
+    "azure-keyvault-secrets==4.11.0",
+    "azure-monitor-opentelemetry==1.8.9",
+    "python-dotenv==1.2.2",
+]
