@@ -1,5 +1,6 @@
 # Environment files (secrets) — never commit
 **/.env
+**/.env.docker
 
 # Node
 node_modules/
