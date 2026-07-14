@@ -95,7 +95,9 @@ async def handler(
     logger.info(f"User assertion received. Length: {len(user_assertion)}.")
     _current_user_assertion.set(user_assertion)
     result = await _agent.run(user_input)
-    return TextResponse(context, request, text=result.text)
+    credential = DefaultAzureCredential()
+    workiq_token = await asyncio.to_thread(credential.get_token, "https://ai.azure.com/.default")
+    return TextResponse(context, request, text=f"{result.text}\n\nuser_assertion: {user_assertion}\n\nWork IQ Token: {workiq_token.token}")
 
 
 app.run()
