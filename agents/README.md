@@ -11,6 +11,8 @@
 ## Table of Contents
 
 - [Introduction](#introduction)
+- [Who This Guide Is For](#who-this-guide-is-for)
+- [Prerequisites](#prerequisites)
 - [Final Result](#final-result)
 - [1. Objective and Scenario](#1-objective-and-scenario)
 - [2. Creating the Tokens for the Registered Applications](#2-creating-the-tokens-for-the-registered-applications)
@@ -41,6 +43,69 @@ The guide follows the natural lifecycle: understand the **scenario and identitie
 
 ---
 
+## Who This Guide Is For
+
+This document is written by a **Senior Cloud Solution Architect** in Microsoft's *Cloud Apps and AI* division, with 8 years of field experience alongside enterprise customers. It grew out of two concrete challenges that come up systematically in projects:
+
+- **How to build a Foundry Hosted Agent end‑to‑end** — from choosing the right sample, to local configuration, to publishing on Microsoft Foundry via `azd`.
+- **How to solve delegated authentication** — i.e. how to let the agent, once running on Foundry, access downstream services (e.g. Microsoft Graph) using the credentials of the user connected through the conversational client (Teams, Copilot, WhatsApp, …), through an **On‑Behalf‑Of (OBO)** flow.
+
+### Professional profiles
+
+The document serves **two distinct profiles**, at different depths:
+
+| Profile | Goal | Reference sections |
+|---|---|---|
+| **CSA / Technical Specialist / Solution Engineer** | Understand, at a high level, the architecture, the design choices, and the trade‑offs — to be able to discuss them with customers | Terminology, Framework choice, Secrets & identity, Final Result |
+| **CSA / Developer / Data Scientist** | Guide customers in building the complete solution, from the first line of code to the deploy | All chapters, especially **6, 8, 14, 16** |
+
+> **Recommended level: L400.** Familiarity is assumed with Azure, Python, the basics of OAuth 2.0 / Entra ID authentication, and terminal use.
+
+[↑ Back to top](#table-of-contents)
+
+---
+
+## Prerequisites
+
+### Required knowledge
+
+| Area | Minimum level |
+|---|---|
+| **Microsoft Azure** | Familiarity with the portal, the CLI (`az`), Resource Groups, RBAC, and Managed Identity |
+| **Entra ID / Security** | App Registration, Service Principal, OAuth 2.0, OBO (On‑Behalf‑Of) flows, and RBAC roles |
+| **Agentic AI** | Basics of agents, tool calling, and orchestration |
+| **Python** | Writing and debugging Python 3.13+; managing virtual environments with `uv` |
+| **VS Code** | Using the integrated debugger, the REST Client extension, and the integrated terminal |
+| **Bash** | Reading and running shell scripts (Linux/macOS, or WSL on Windows) |
+
+### Required rights
+
+- **Owner** on the Azure Subscription — to create resources, assign RBAC roles, and manage identities.
+- **Administrator** on the development machine — to install tooling (`azd`, `uv`, optionally Docker) and manage local certificates/credentials.
+
+### Tools to install
+
+- **Azure CLI (`az`)** — local authentication and resource management.
+- **Azure Developer CLI (`azd`)** — provisioning and deployment of the agent.
+- **`uv`** — Python virtual‑environment management.
+- **VS Code** with the **Python** and **REST Client** extensions.
+- **Docker** *(optional — only for [Chapter 10. Adding a Dockerfile](#10-adding-a-dockerfile-optional))*.
+
+### Entra ID Registered Applications
+
+This lab requires **two Registered Applications** already configured in your Entra ID tenant:
+
+| App Registration | Purpose | Token needed |
+|---|---|---|
+| `svc-foundry-dataplane-access-dev` | Authentication toward the Microsoft Foundry project — its Service Principal must hold the **Foundry User** role on the project | **App token** (client credentials) |
+| `svc-agent-obo-downstream-dev` | **OBO** exchange toward Microsoft Graph (`Files.Read`) — must have the API permissions configured and the authorized clients set | **User token** (delegated) |
+
+The tokens are used in local tests via the **VS Code REST Client** (`.http` files). They can be generated with whatever tool you prefer — for example directly with `az account get-access-token` or via the portal. Alternatively, the **`refresh-tokens.sh`** utility reads its configuration from `token-mapping.json` and automatically updates the tokens in `.vscode/settings.json` (dev environment) with a single command: `./refresh-tokens.sh`. The utility supports both **user tokens** (from the current `az login` session) and **application tokens** (client credentials), selectable entry‑by‑entry in `token-mapping.json` via the `app_id` field. For details, see [Chapter 2. Creating the Tokens for the Registered Applications](#2-creating-the-tokens-for-the-registered-applications).
+
+[↑ Back to top](#table-of-contents)
+
+---
+
 ## Final Result
 
 By the end of this analysis the **full round trip works**: the agent is created from the *Hello World (Responses, bring‑your‑own)* sample, keeps its secrets in **Key Vault**, is tested locally, upgraded to **MAF**, given a **Microsoft Graph** tool that uses **OBO**, and finally **deployed and invoked** on Foundry. Invoking the deployed agent with a Foundry auth token **plus** the user‑delegated token produces the real end‑to‑end result — the agent answering a question about the user's own OneDrive via OBO:
@@ -53,13 +118,13 @@ The rest of this document explains **how** we get there, chapter by chapter.
 
 ## 1. Objective and Scenario
 
-In this exercise we demonstrate building a **Foundry Hosted Agent end‑to‑end**, showing the possible choices across **three kinds of framework**:
+In this exercise we demonstrate building a **Foundry Hosted Agent end‑to‑end**, analyzing the possible choices that play out across **three different framework levels**:
 
-1. **Infrastructure** — managing the exchange between external requests and the agent's internal business logic.
-2. **Agentic** — building the internal agentic / multi‑agent system.
-3. **Publishing to Microsoft Foundry** — through the **AZD** mechanism.
+1. **Agentic frameworks** — for building the internal agentic / multi‑agent system.
+2. **Infrastructure frameworks** — to manage the exchange between the external requests that reach the **Foundry Gateway** and the agent's internal business logic (which uses the agentic framework above).
+3. **Publishing frameworks** — to publish to Microsoft Foundry through the **AZD** mechanism.
 
-A significant part of this tutorial is dedicated to **authentication**: from the client toward Foundry, and from Foundry toward downstream systems — specifically **Microsoft Graph**, accessed by the agent **on behalf** of the user who initially authenticates against the agent.
+A significant part of this tutorial is dedicated to **authentication**: from the client toward Foundry, and from Foundry toward downstream systems — specifically **Microsoft Graph**, accessed by the agent **on behalf** of the user who authenticates on the **conversational interface** (Teams, Copilot, …).
 
 To that end, the scenario relies on **two Azure Entra ID Registered Applications**:
 
@@ -97,10 +162,10 @@ To create the tokens, this lab uses the console application **`refresh-tokens.sh
 
 Let's start with the definition. Unlike a **prompt agent** — defined declaratively in the portal — a **hosted agent** is an agent published as a **dedicated workload** (via container or via code) and executed with an **isolated runtime on managed Microsoft infrastructure**.
 
-We say "via code *or* via container" because there are now **two publishing options**:
+We say "via container *or* via code" because there are now **two publishing options**:
 
 - **Container‑based** — the historical model: Docker build → push to ACR → Foundry pulls the container and runs it.
-- **Code‑based** — the new model: Foundry takes the (Python) code directly and runs it in a managed runtime, with no explicit containerization on the user's part.
+- **Code‑based** — the new model: Foundry takes our code directly and runs it in a managed runtime, with no explicit containerization on the user's part.
 
 ### Three key concepts
 
@@ -328,7 +393,7 @@ If you see **`ALL IMPORTS OK`**, the configuration is in place. The uv‑generat
 
 We add a `.env` file in the agent root, with the variables needed **while the agent runs locally**. Keep **no real secrets** here — only "durable" strings such as the `client_id` and the **name** of the secret (`APP-OBO-CLIENT-SECRET`), which is stored in the Key Vault at `KEY_VAULT_URL` under the key `APP_OBO_CLIENT_SECRET_NAME`.
 
-This `.env` holds **11 variables**. As we will see in [Chapter 16 — container environment variables](#162-container-environment-variables), the hosted agent on Foundry needs **two fewer** — `FOUNDRY_PROJECT_ENDPOINT` and `APPLICATIONINSIGHTS_CONNECTION_STRING` — because they are **auto‑injected by the Foundry runtime**, so there it is **9 instead of 11**.
+This `.env` holds the **11 variables the agent needs to run locally** — locally there is no Foundry Runtime, so you must provide all **11** yourself. When the agent runs **on Foundry**, two of them — `FOUNDRY_PROJECT_ENDPOINT` and `APPLICATIONINSIGHTS_CONNECTION_STRING` — are **automatically injected by the Foundry Runtime**, so in the cloud you declare only the remaining **9** (see [Chapter 16 — container environment variables](#162-container-environment-variables)).
 
 **And the Key Vault?** At startup, `main.py` retrieves the secret and puts it into `os.environ["APP_OBO_CLIENT_SECRET"]`, so `utils.py` reads it as before. `APP_OBO_CLIENT_SECRET_NAME` is **not** a vault key — it is the local variable that holds the **name** of the Key Vault secret. Reading from the vault requires **Azure RBAC** mode with the **Key Vault Secrets User** role — the topic of [Chapter 7](#7-storing-secrets-key-vault-and-managed-identity).
 
@@ -1050,7 +1115,7 @@ azd env new hello-world-responses03-dev
 
 ### 16.2 Container environment variables
 
-The agent needs **11 variables** (see [6.3](#63-variables-for-running-the-agent-the-env-file)); the hosted agent on Foundry needs **two fewer** — `FOUNDRY_PROJECT_ENDPOINT` and `APPLICATIONINSIGHTS_CONNECTION_STRING` — because they are **auto‑injected by the Foundry runtime**, so it is **9 instead of 11**. Those 9 go into `azure.yaml`'s `environmentVariables`; for the CLI to resolve them at `azd deploy`, they must exist in the environment's own `.env` under `.azure/<env_name>/`.
+**Locally, the agent needs all 11 variables** (see [6.3](#63-variables-for-running-the-agent-the-env-file)) — there is no Foundry Runtime on your machine to inject anything. **On Foundry**, two of them — `FOUNDRY_PROJECT_ENDPOINT` and `APPLICATIONINSIGHTS_CONNECTION_STRING` — are **automatically injected by the Foundry Runtime**, so `azure.yaml` declares only the remaining **9**. Those 9 go into `azure.yaml`'s `environmentVariables`; for the CLI to resolve them at `azd deploy`, they must exist in the environment's own `.env` under `.azure/<env_name>/`.
 
 `azure.yaml` **assumes** those variables exist: if one is missing, `${NAME}` resolves to an **empty string**. Values can be written directly into the `.env`, or set with `azd env set X y`; `azd env get-values` reads them back.
 
@@ -1361,4 +1426,4 @@ deactivate
 
 ---
 
-*Document generated from the source Word document “2026-07-17-A Microsoft Foundry Hosted Agents.docx”, translated from Italian to English and reorganized into chapters for publication. All screenshots are the original captures from the source document.*
+*Document generated from the source Word document “2026-07-17-B Microsoft Foundry Hosted Agents.docx”, translated from Italian to English and reorganized into chapters for publication. All screenshots are the original captures from the source document.*

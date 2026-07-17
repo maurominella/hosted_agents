@@ -5,6 +5,38 @@ All notable changes to this documentation are recorded in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-17
+
+Onboarding and clarity update. Derived from the source material
+"2026-07-17-B Microsoft Foundry Hosted Agents".
+
+### Added
+
+- **"Who This Guide Is For"** front‑matter section: the two challenges the guide
+  addresses, a *professional profiles* table (CSA / Technical Specialist / Solution
+  Engineer vs CSA / Developer / Data Scientist) with the reference sections for each,
+  and the recommended **L400** level.
+- **"Prerequisites"** front‑matter section: required knowledge (Azure, Entra ID /
+  Security, Agentic AI, Python, VS Code, Bash), required rights (Subscription **Owner**,
+  machine **Administrator**), tools to install (`az`, `azd`, `uv`, VS Code + Python &
+  REST Client, optional Docker), and the two Entra ID registered applications with the
+  token type each one needs (app vs user), including how to generate the tokens.
+
+### Changed
+
+- **Environment variables clarified (local vs Foundry).** It is now explicit that the
+  agent needs **all 11 variables to run locally** (no Foundry Runtime to inject them),
+  while **on Foundry** two of them — `FOUNDRY_PROJECT_ENDPOINT` and
+  `APPLICATIONINSIGHTS_CONNECTION_STRING` — are **automatically injected by the Foundry
+  Runtime**, so `azure.yaml` declares only the remaining **9**. Wording aligned in both
+  Chapter 6.3 and Chapter 16.2.
+- **Objective and scenario** reworded: the three framework choices are now presented as
+  three **levels** — *agentic*, *infrastructure* (requests reaching the Foundry Gateway
+  vs the agent's business logic), and *publishing* via AZD — and downstream access is
+  framed as happening on behalf of the user authenticating on the conversational
+  interface (Teams, Copilot, …).
+- Minor terminology consistency ("via container or via code").
+
 ## [1.0.0] - 2026-07-17
 
 Initial public release of the **Microsoft Foundry Hosted Agents — End‑to‑End Guide**,
