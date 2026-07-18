@@ -3,12 +3,16 @@
 > A complete, hands‑on walkthrough for building a **Foundry Hosted Agent** in Python, running and debugging it locally, securing its secrets with **Azure Key Vault + Managed Identity**, isolating its telemetry in **Application Insights**, upgrading it to the **Microsoft Agent Framework (MAF)**, wiring a **Microsoft Graph** tool through **On‑Behalf‑Of (OBO)**, and finally deploying and invoking it in a **Microsoft Foundry** project with the **Azure Developer CLI (`azd`)**.
 >
 > This guide is meant to take a reader **from zero to a working, deployed agent**, and to double as **reference documentation** for going deeper on each moving part. It is based on a real, working end‑to‑end setup: the agent (`hello-world-python-responses`) is created, tested locally, deployed into a Foundry project, and invoked — the full round trip.
+>
+> 📄 **Changelog:** see [`CHANGELOG.md`](CHANGELOG.md) for the version history.
 
 ---
 
 ## Table of Contents
 
 - [Introduction](#introduction)
+- [Who This Guide Is For](#who-this-guide-is-for)
+- [Prerequisites](#prerequisites)
 - [Final Result](#final-result)
 - [1. Objective and Scenario](#1-objective-and-scenario)
 - [2. Creating the Tokens for the Registered Applications](#2-creating-the-tokens-for-the-registered-applications)
@@ -39,6 +43,89 @@ The guide follows the natural lifecycle: understand the **scenario and identitie
 
 ---
 
+## Who This Guide Is For
+
+This document is written by a **Senior Cloud Solution Architect** in Microsoft's *Cloud Apps and AI* division, with 8 years of field experience alongside enterprise customers. It grew out of two concrete challenges that come up systematically in projects:
+
+- **How to build a Foundry Hosted Agent end‑to‑end** — from choosing the right sample, to local configuration, to publishing on Microsoft Foundry via `azd`.
+- **How to solve delegated authentication** — i.e. how to let the agent, once running on Foundry, access downstream services (e.g. Microsoft Graph) using the credentials of the user connected through the conversational client (Teams, Copilot, WhatsApp, …), through an **On‑Behalf‑Of (OBO)** flow.
+
+### Professional profiles
+
+The document serves **two distinct profiles**, at different depths:
+
+| Profile | Goal | Reference sections |
+|---|---|---|
+| **CSA / Technical Specialist / Solution Engineer** | Understand, at a high level, the architecture, the design choices, and the trade‑offs — to be able to discuss them with customers | Terminology, Framework choice, Secrets & identity, Final Result |
+| **CSA / Developer / Data Scientist** | Guide customers in building the complete solution, from the first line of code to the deploy | All chapters, especially **6, 8, 14, 16** |
+
+> **Recommended level: L400.** Familiarity is assumed with Azure, Python, the basics of OAuth 2.0 / Entra ID authentication, and terminal use.
+
+[↑ Back to top](#table-of-contents)
+
+---
+
+## Prerequisites
+
+### Required knowledge
+
+| Area | Minimum level |
+|---|---|
+| **Microsoft Azure** | Familiarity with the portal, the CLI (`az`), Resource Groups, RBAC, and Managed Identity |
+| **Entra ID / Security** | App Registration, Service Principal, OAuth 2.0, OBO (On‑Behalf‑Of) flows, and RBAC roles |
+| **Agentic AI** | Basics of agents, tool calling, and orchestration |
+| **Python** | Writing and debugging Python 3.13+; managing virtual environments with `uv` |
+| **VS Code** | Using the integrated debugger, the REST Client extension, and the integrated terminal |
+| **Bash** | Reading and running shell scripts (Linux/macOS, or WSL on Windows) |
+
+### Required rights
+
+- **Owner** on the Azure Subscription — to create resources, assign RBAC roles, and manage identities.
+- **Administrator** on the development machine — to install tooling (`azd`, `uv`, optionally Docker) and manage local certificates/credentials.
+
+### Tools to install
+
+- **Azure CLI (`az`)** — local authentication and resource management.
+- **Azure Developer CLI (`azd`)** — provisioning and deployment of the agent.
+- **`uv`** — Python virtual‑environment management.
+- **VS Code** with the **Python** and **REST Client** extensions.
+- **Docker** *(optional — only for [Chapter 10. Adding a Dockerfile](#10-adding-a-dockerfile-optional))*.
+
+### Entra ID Registered Applications
+
+This lab requires **two Registered Applications** already configured in your Entra ID tenant:
+
+| App Registration | Purpose | Token needed |
+|---|---|---|
+| `svc-foundry-dataplane-access-dev` | Authentication toward the Microsoft Foundry project — its Service Principal must hold the **Foundry Agent Consumer** role on the project | **App token** (client credentials) |
+| `svc-agent-obo-downstream-dev` | **OBO** exchange toward Microsoft Graph (`Files.Read`) — must have the API permissions configured and the authorized clients set | **User token** (delegated) |
+
+The tokens are used in local tests via the **VS Code REST Client** (`.http` files). They can be generated with whatever tool you prefer — for example directly with `az account get-access-token` or via the portal. Alternatively, the **`refresh-tokens.sh`** utility reads its configuration from `token-mapping.json` and automatically updates the tokens in `.vscode/settings.json` (dev environment) with a single command: `./refresh-tokens.sh`. The utility supports both **user tokens** (from the current `az login` session) and **application tokens** (client credentials), selectable entry‑by‑entry in `token-mapping.json` via the `app_id` field. For details, see [Chapter 2. Creating the Tokens for the Registered Applications](#2-creating-the-tokens-for-the-registered-applications).
+
+### Important — RBAC roles update (July 2026)
+
+In **July 2026, four new RBAC roles** were introduced for the Foundry Project. A direct consequence for our scenario: the default **least‑privilege** role for **invoking** an agent is no longer **Foundry User** — that role remains valid for **building, developing, and testing** (it allows not only invoking but also modifying the project's agents, reading conversation history, and deleting them — in practice any operation *except* assigning roles to other user principals). Accordingly, we assign the **Foundry Agent Consumer** role to the user principals of this lab, for convenience at the **Foundry Project** scope — though in production it should be scoped to the specific **Foundry Agent**.
+
+The CLI command (the trailing `/agents/<agentName>` can be omitted to set the role at the whole‑project level instead of a single agent):
+
+```bash
+az role assignment create --assignee "<principalId>" \
+  --role "eed3b665-ab3a-47b6-8f48-c9382fb1dad6" \
+  --scope "/subscriptions/<subId>/resourceGroups/<rg-name>/providers/Microsoft.CognitiveServices/accounts/<account>/projects/<projectName>/agents/<agentName>"
+```
+
+| Role | Description |
+|---|---|
+| **Foundry Agent Consumer** | Grants access to interact with agent endpoints in a Foundry project. **Least‑privilege** role for principals that only need to **interact with** agents (this is the one we use to invoke). |
+| **Foundry User** (pre‑existing) | Grants reader access to the Foundry project, Foundry resource, and data actions. Least‑privilege role for developers **building and testing** agents. |
+| **Foundry Project Manager** | Management actions on Foundry projects, build/develop, and can conditionally assign the *Foundry User* role to other user principals. |
+| **Foundry Account Owner** | Full access to manage projects and resources; can conditionally assign the *Foundry User*, ACR, and monitoring roles to other user principals. |
+| **Foundry Owner** | Full access to manage projects and resources and to build/develop; can conditionally assign the *Foundry User*, ACR, and monitoring roles. Highly privileged self‑serve role. |
+
+[↑ Back to top](#table-of-contents)
+
+---
+
 ## Final Result
 
 By the end of this analysis the **full round trip works**: the agent is created from the *Hello World (Responses, bring‑your‑own)* sample, keeps its secrets in **Key Vault**, is tested locally, upgraded to **MAF**, given a **Microsoft Graph** tool that uses **OBO**, and finally **deployed and invoked** on Foundry. Invoking the deployed agent with a Foundry auth token **plus** the user‑delegated token produces the real end‑to‑end result — the agent answering a question about the user's own OneDrive via OBO:
@@ -51,23 +138,23 @@ The rest of this document explains **how** we get there, chapter by chapter.
 
 ## 1. Objective and Scenario
 
-In this exercise we demonstrate building a **Foundry Hosted Agent end‑to‑end**, showing the possible choices across **three kinds of framework**:
+In this exercise we demonstrate building a **Foundry Hosted Agent end‑to‑end**, analyzing the possible choices that play out across **three different framework levels**:
 
-1. **Infrastructure** — managing the exchange between external requests and the agent's internal business logic.
-2. **Agentic** — building the internal agentic / multi‑agent system.
-3. **Publishing to Microsoft Foundry** — through the **AZD** mechanism.
+1. **Agentic frameworks** — for building the internal agentic / multi‑agent system.
+2. **Infrastructure frameworks** — to manage the exchange between the external requests that reach the **Foundry Gateway** and the agent's internal business logic (which uses the agentic framework above).
+3. **Publishing frameworks** — to publish to Microsoft Foundry through the **AZD** mechanism.
 
-A significant part of this tutorial is dedicated to **authentication**: from the client toward Foundry, and from Foundry toward downstream systems — specifically **Microsoft Graph**, accessed by the agent **on behalf** of the user who initially authenticates against the agent.
+A significant part of this tutorial is dedicated to **authentication**: from the client toward Foundry, and from Foundry toward downstream systems — specifically **Microsoft Graph**, accessed by the agent **on behalf** of the user who authenticates on the **conversational interface** (Teams, Copilot, …).
 
 To that end, the scenario relies on **two Azure Entra ID Registered Applications**:
 
 ### `svc-foundry-dataplane-access-dev` — access to the Foundry project
 
-Enables authentication to the Microsoft Foundry project through its **Service Principal**, which holds the **Foundry User** RBAC role on the Foundry project. It is known that the authentication token to the Foundry project — typically used when invoking one of its agents — is **not** passed by the Foundry Gateway *inside* the agent itself; it is used **only** to grant the ability to invoke it. Since the user is therefore not "known" inside the Foundry agent, using the app‑token tied to this app registration avoids having to assign the *Foundry User* role to every potential user.
+Enables authentication to the Microsoft Foundry project through its **Service Principal**, which holds the **Foundry Agent Consumer** RBAC role on the Foundry project (see the [RBAC roles update](#important--rbac-roles-update-july-2026) above). It is known that the authentication token to the Foundry project — typically used when invoking one of its agents — is **not** passed by the Foundry Gateway *inside* the agent itself; it is used **only** to grant the ability to invoke it. Since the user is therefore not "known" inside the Foundry agent, using the app‑token tied to this app registration avoids having to assign the *Foundry Agent Consumer* role to every potential user.
 
-| App registration | Service Principal | Foundry User role assignment |
+| App registration | Service Principal | Foundry Agent Consumer role assignment |
 |---|---|---|
-| ![Azure portal — App registration svc-foundry-dataplane-access-dev, Essentials: Application (client) ID b0cc68f2-87d7-491d-8cc2-…, Object ID, Directory (tenant) ID 3ad0b905-…, Client credentials "0 certificate, 1 secret", State Activated.](images/01-registered-app-foundry-dataplane.png) | ![Azure portal — Enterprise Application (Service Principal) svc-foundry-dataplane-access-dev, Properties: Name, Application ID b0cc68f2-…, Object ID 3f426eda-….](images/02-foundry-dataplane-service-principal.png) | ![Azure portal — the aif7159-standard-agent-project Foundry project, Access control (IAM) → Role assignments filtered by the app; under "Foundry User (1)" the service principal svc-foundry-dataplane-access-dev is listed.](images/03-foundry-dataplane-role-assignment.png) |
+| ![Azure portal — App registration svc-foundry-dataplane-access-dev, Essentials: Application (client) ID b0cc68f2-87d7-491d-8cc2-…, Object ID, Directory (tenant) ID 3ad0b905-…, Client credentials "0 certificate, 1 secret", State Activated.](images/01-registered-app-foundry-dataplane.png) | ![Azure portal — Enterprise Application (Service Principal) svc-foundry-dataplane-access-dev, Properties: Name, Application ID b0cc68f2-…, Object ID 3f426eda-….](images/02-foundry-dataplane-service-principal.png) | ![Azure portal — the aif7159-standard-agent-project Foundry project, Access control (IAM) → Role assignments filtered by the app; under "Foundry Agent Consumer (1)" the service principal svc-foundry-dataplane-access-dev is listed.](images/03-foundry-agent-consumer-role-assignment.png) |
 
 ### `svc-agent-obo-downstream-dev` — OBO exchange toward Microsoft Graph
 
@@ -95,10 +182,10 @@ To create the tokens, this lab uses the console application **`refresh-tokens.sh
 
 Let's start with the definition. Unlike a **prompt agent** — defined declaratively in the portal — a **hosted agent** is an agent published as a **dedicated workload** (via container or via code) and executed with an **isolated runtime on managed Microsoft infrastructure**.
 
-We say "via code *or* via container" because there are now **two publishing options**:
+We say "via container *or* via code" because there are now **two publishing options**:
 
 - **Container‑based** — the historical model: Docker build → push to ACR → Foundry pulls the container and runs it.
-- **Code‑based** — the new model: Foundry takes the (Python) code directly and runs it in a managed runtime, with no explicit containerization on the user's part.
+- **Code‑based** — the new model: Foundry takes our code directly and runs it in a managed runtime, with no explicit containerization on the user's part.
 
 ### Three key concepts
 
@@ -326,7 +413,7 @@ If you see **`ALL IMPORTS OK`**, the configuration is in place. The uv‑generat
 
 We add a `.env` file in the agent root, with the variables needed **while the agent runs locally**. Keep **no real secrets** here — only "durable" strings such as the `client_id` and the **name** of the secret (`APP-OBO-CLIENT-SECRET`), which is stored in the Key Vault at `KEY_VAULT_URL` under the key `APP_OBO_CLIENT_SECRET_NAME`.
 
-This `.env` holds **11 variables**. As we will see in [Chapter 16 — container environment variables](#162-container-environment-variables), the hosted agent on Foundry needs **two fewer** — `FOUNDRY_PROJECT_ENDPOINT` and `APPLICATIONINSIGHTS_CONNECTION_STRING` — because they are **auto‑injected by the Foundry runtime**, so there it is **9 instead of 11**.
+This `.env` holds the **11 variables the agent needs to run locally** — locally there is no Foundry Runtime, so you must provide all **11** yourself. When the agent runs **on Foundry**, two of them — `FOUNDRY_PROJECT_ENDPOINT` and `APPLICATIONINSIGHTS_CONNECTION_STRING` — are **automatically injected by the Foundry Runtime**, so in the cloud you declare only the remaining **9** (see [Chapter 16 — container environment variables](#162-container-environment-variables)).
 
 **And the Key Vault?** At startup, `main.py` retrieves the secret and puts it into `os.environ["APP_OBO_CLIENT_SECRET"]`, so `utils.py` reads it as before. `APP_OBO_CLIENT_SECRET_NAME` is **not** a vault key — it is the local variable that holds the **name** of the Key Vault secret. Reading from the vault requires **Azure RBAC** mode with the **Key Vault Secrets User** role — the topic of [Chapter 7](#7-storing-secrets-key-vault-and-managed-identity).
 
@@ -383,17 +470,17 @@ ENABLE_SENSITIVE_DATA=true
 
 There are **two separate, independent planes** — the first is *"who gets in"*, the second is *"with which identity the agent presents itself to the outside"*.
 
-**1) Ingress — who can invoke the agent.** The caller (a user or a service principal) must hold the **Foundry User** role **on the project** (not on the agent). This governs invocation access.
+**1) Ingress — who can invoke the agent.** The caller (a user or a service principal) must hold the **Foundry Agent Consumer** role **on the project** (not on the agent) — the least‑privilege invoke role introduced in July 2026 (see the [RBAC roles update](#important--rbac-roles-update-july-2026)). This governs invocation access.
 
 **2) Egress — with which identity the agent accesses remote resources** *(we obtain this identity only after the deployment).* The agent runs under its own **Agent Identity (Microsoft Entra Agent ID)**: a **per‑instance service principal**, distinct both from the caller and from the Foundry account's managed identity. Roles on resources (e.g. **Key Vault Secrets User**) are assigned to **this** identity.
 
 Two handy verification commands (post‑assignment):
 
 ```bash
-# Identities that can invoke a Foundry Project (Foundry User role):
+# Identities that can invoke a Foundry Project (Foundry Agent Consumer role):
 PROJECT_SCOPE="/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<account>/projects/<project>"
 az role assignment list --scope "$PROJECT_SCOPE" \
-  --query "[?roleDefinitionName=='Foundry User'].{principal:principalId, type:principalType, role:roleDefinitionName}" -o table
+  --query "[?roleDefinitionName=='Foundry Agent Consumer'].{principal:principalId, type:principalType, role:roleDefinitionName}" -o table
 
 # Identities that can access the Key Vault resource:
 RES_SCOPE="/subscriptions/.../providers/Microsoft.KeyVault/vaults/<kv>"
@@ -401,31 +488,31 @@ az role assignment list --scope "$RES_SCOPE" \
   --query "[?principalType=='ServicePrincipal'].{principal:principalId, role:roleDefinitionName}" -o table
 ```
 
-### Assigning **Foundry User** to the service principal (ingress)
+### Assigning **Foundry Agent Consumer** to the service principal (ingress)
 
-The following three screenshots show how to assign the **Foundry User** role to an *Entra ID registered application* — or, more precisely, to its **Service Principal** instance `svc-foundry-dataplane-access-dev`.
+The following three screenshots show how to assign the **Foundry Agent Consumer** role to an *Entra ID registered application* — or, more precisely, to its **Service Principal** instance `svc-foundry-dataplane-access-dev`.
 
 ![Azure portal — App registration svc-foundry-dataplane-access-dev, Essentials. The Application (client) ID (b0cc68f2-87d7-491d-8cc2-…) is highlighted, alongside the Object ID and the Directory (tenant) ID.](images/10-assign-foundry-user-sp-app-registration.png)
 
 ![Azure portal — Enterprise Application svc-foundry-dataplane-access-dev (Service Principal), Properties: Name, Application ID (b0cc68f2-…), and Object ID.](images/11-assign-foundry-user-sp-enterprise-app.png)
 
-![Azure portal — the aif7159-standard-agent-project Foundry project, Access control (IAM) → Role assignments filtered by the client ID; under "Foundry User (1)" the service principal svc-foundry-dataplane-access-dev is listed.](images/12-foundry-user-role-assignment.png)
+![Azure portal — the aif7159-standard-agent-project Foundry project, Access control (IAM) → Role assignments filtered by the client ID; under "Foundry Agent Consumer (1)" the service principal svc-foundry-dataplane-access-dev is listed.](images/03-foundry-agent-consumer-role-assignment.png)
 
 ### Assigning **Key Vault Secrets User** to the Agent Identity (egress)
 
 The next three screenshots show how to retrieve the **agent's identity** inside the Foundry portal → select the agent → **Details** → read the **Entra agent identity** ID. That ID is then added to the **Key Vault** IAM with the **Key Vault Secrets User** role.
 
-![Microsoft Foundry portal — agent hello-world-python-responses (Running, Version 1), Details tab. Under "Identity & access", the "Entra agent identity" ID is highlighted, together with the "Entra agent blueprint" ID.](images/13-agent-identity-foundry-portal.png)
+![Microsoft Foundry portal — agent hello-world-python-responses (Running, Version 1), Details tab. Under "Identity & access", the "Entra agent identity" ID is highlighted, together with the "Entra agent blueprint" ID.](images/12-agent-identity-foundry-portal.png)
 
-![Azure portal — Key Vault mauromikeyvault01, Access control (IAM) → Add role assignment. Selected role: Key Vault Secrets User; "Assign access to: User, group, or service principal"; the Select members panel filtered by the agent identity's object ID shows the agent's service identity (cog-…-mm-foundry-account0001-project01-hello-world-python-…).](images/14-keyvault-add-role-assignment.png)
+![Azure portal — Key Vault mauromikeyvault01, Access control (IAM) → Add role assignment. Selected role: Key Vault Secrets User; "Assign access to: User, group, or service principal"; the Select members panel filtered by the agent identity's object ID shows the agent's service identity (cog-…-mm-foundry-account0001-project01-hello-world-python-…).](images/13-keyvault-add-role-assignment.png)
 
-![Azure portal — Key Vault mauromikeyvault01, Access control (IAM), role assignments grouped by role. Under "Key Vault Secrets User" the agent's service principal (foundry7159-aif7159-standard-agent-project-hell…) is listed with its object ID.](images/15-keyvault-iam-agent-identity.png)
+![Azure portal — Key Vault mauromikeyvault01, Access control (IAM), role assignments grouped by role. Under "Key Vault Secrets User" the agent's service principal (foundry7159-aif7159-standard-agent-project-hell…) is listed with its object ID.](images/14-keyvault-iam-agent-identity.png)
 
 ### Summary
 
 | Needed for… | Correct identity | How to obtain it |
 |---|---|---|
-| **Invoking** the agent | the caller, with **Foundry User** on the project | `az role assignment list` on the project scope |
+| **Invoking** the agent | the caller, with **Foundry Agent Consumer** on the project | `az role assignment list` on the project scope |
 | The agent **accessing a resource** | the **Agent Identity** (per‑instance SP) | from the resource's role assignments / the Foundry portal / Microsoft Entra Agent ID |
 
 ### Why Key Vault beats `.env`, and what's even better
@@ -451,7 +538,7 @@ Add `monitoring.py`, and import it in `main.py` — remembering that `load_doten
 
 **Fundamental logging detail:** in `main.py` the `logger` imported from `monitoring` is **overwritten** by the line `logger = logging.getLogger(__name__)`, so our logging settings and filters would **not** be applied to our logs. We remove that line (and the now‑redundant `import logging`) so the logger configuration set in `monitoring.py` is actually used:
 
-![VS Code main.py imports. Green "ADD THIS LINE" on `from monitoring import logger`; red "DELETE THIS LINE" on `import logging` and on `logger = logging.getLogger(__name__)`.](images/16-mainpy-logger-edits.png)
+![VS Code main.py imports. Green "ADD THIS LINE" on `from monitoring import logger`; red "DELETE THIS LINE" on `import logging` and on `logger = logging.getLogger(__name__)`.](images/15-mainpy-logger-edits.png)
 
 `monitoring.py` (initial version):
 
@@ -563,11 +650,11 @@ x-client-user-token: aaa
 
 In the debugger we can confirm that the handler receives the request input **and** the `x-client-user-token` header (here set to `aaa`), visible under `context.client_headers`:
 
-![VS Code debugging main.py: execution paused at the breakpoint on the user_input line. The Variables panel expands context.client_headers and highlights 'x-client-user-token': '"aaa"', with request = {'input': 'What is a meaning function. Answer in…'}.](images/17-handler-debug-user-assertion.png)
+![VS Code debugging main.py: execution paused at the breakpoint on the user_input line. The Variables panel expands context.client_headers and highlights 'x-client-user-token': '"aaa"', with request = {'input': 'What is a meaning function. Answer in…'}.](images/16-handler-debug-user-assertion.png)
 
 And the HTTP response comes back `200 OK` with the model's answer:
 
-![The HTTP Response (200). Headers include x-platform-server: azure-ai-agentserver-core/2.0.0b7 and azure-ai-agentserver-responses/1.0.0b8. The JSON body's output → content → output_text reads "Maps expressions to their referents or truth conditions." with status "completed".](images/18-local-test-response-200.png)
+![The HTTP Response (200). Headers include x-platform-server: azure-ai-agentserver-core/2.0.0b7 and azure-ai-agentserver-responses/1.0.0b8. The JSON body's output → content → output_text reads "Maps expressions to their referents or truth conditions." with status "completed".](images/17-local-test-response-200.png)
 
 ### How streaming works here
 
@@ -588,7 +675,7 @@ When we add MAF: `await agent.run(text)` → non‑streaming → maps to `TextRe
 
 In this context a Dockerfile is **not strictly needed**, because later we do a **code deployment**, not a **container deployment**. Still, it is useful to see and costs very little. The steps:
 
-1. **Duplicate `.env` into `.env.docker`** and add the last 3 lines, so Docker can authenticate to Foundry with a **service principal** that is a *Foundry User* of that project. **These label names are fixed** (the names `DefaultAzureCredential` looks for):
+1. **Duplicate `.env` into `.env.docker`** and add the last 3 lines, so Docker can authenticate to Foundry with a **service principal** that is a *Foundry Agent Consumer* of that project (or agent). **These label names are fixed** (the names `DefaultAzureCredential` looks for):
 
    ```dotenv
    AZURE_TENANT_ID=3ad0b905-34ab-4116-93d9-c1dcc2d35af6
@@ -770,7 +857,7 @@ traces
 
 `cloud_RoleName` gets us all the logs generated **during** the agent's execution — but that includes telemetry from **other components** writing to the same instrumentation string. `where severityLevel >= 1` tells App Insights to capture **all** INFO+ logs of the process — including uvicorn, the runtime, and the framework, not just ours:
 
-![Application Insights Logs results for cloud_RoleName == "hello-world-python-responses" filtered by severityLevel >= 1, with three annotated example rows: "access log by uvicorn (web server)", "runtime log → azure.ai.agentserver", and "framework log (agent_framework)" — showing the severity filter also captures non-application logs.](images/19-appinsights-severity-filter-noise.png)
+![Application Insights Logs results for cloud_RoleName == "hello-world-python-responses" filtered by severityLevel >= 1, with three annotated example rows: "access log by uvicorn (web server)", "runtime log → azure.ai.agentserver", and "framework log (agent_framework)" — showing the severity filter also captures non-application logs.](images/18-appinsights-severity-filter-noise.png)
 
 So `severityLevel` and `!startswith "Inbound POST"` are a **fragile, imprecise** filter.
 
@@ -1020,7 +1107,7 @@ azd extension upgrade <extension-id>
 azd extension upgrade --all
 ```
 
-![Terminal output of `azd extension list` (run from the project folder), listing the Foundry extensions and their status: azure.ai.agents "Foundry agents (Beta)" 1.0.0-beta.5 (Up to date), azure.ai.connections, azure.ai.inspector, azure.ai.projects, azure.ai.routines, azure.ai.skills, azure.ai.toolboxes, and microsoft.foundry "Microsoft Foundry (Beta)" 1.0.0-beta.1 (Up to date), among others.](images/20-azd-extension-list.png)
+![Terminal output of `azd extension list` (run from the project folder), listing the Foundry extensions and their status: azure.ai.agents "Foundry agents (Beta)" 1.0.0-beta.5 (Up to date), azure.ai.connections, azure.ai.inspector, azure.ai.projects, azure.ai.routines, azure.ai.skills, azure.ai.toolboxes, and microsoft.foundry "Microsoft Foundry (Beta)" 1.0.0-beta.1 (Up to date), among others.](images/19-azd-extension-list.png)
 
 [↑ Back to top](#table-of-contents)
 
@@ -1039,16 +1126,16 @@ cd ..
 code . --reuse-window
 
 # Create the environment
-azd env new hello-world-responses03-dev
+azd env new hello-world-responses05-dev
 ```
 
-![VS Code Explorer showing the .azure/ folder expanded: the newly created hello-world-responses03-dev environment with .env, .env.lock, config.json, and .gitignore, alongside src/hello-world-python-responses.](images/21-azd-environment-created.png)
+![VS Code Explorer showing the .azure/ folder expanded: the newly created hello-world-responses05-dev environment with .env, .env.lock, config.json, and .gitignore, alongside src/hello-world-python-responses.](images/20-azd-environment-created.png)
 
 > ⚠️ **Do not confuse** this with a possible `.env` in the project root (the one `load_dotenv()` uses in `monitoring.py` for the local `python main.py` run): that is a **different** file, for a **different** purpose. The one under `.azure/…/` belongs only to `azd`.
 
 ### 16.2 Container environment variables
 
-The agent needs **11 variables** (see [6.3](#63-variables-for-running-the-agent-the-env-file)); the hosted agent on Foundry needs **two fewer** — `FOUNDRY_PROJECT_ENDPOINT` and `APPLICATIONINSIGHTS_CONNECTION_STRING` — because they are **auto‑injected by the Foundry runtime**, so it is **9 instead of 11**. Those 9 go into `azure.yaml`'s `environmentVariables`; for the CLI to resolve them at `azd deploy`, they must exist in the environment's own `.env` under `.azure/<env_name>/`.
+**Locally, the agent needs all 11 variables** (see [6.3](#63-variables-for-running-the-agent-the-env-file)) — there is no Foundry Runtime on your machine to inject anything. **On Foundry**, two of them — `FOUNDRY_PROJECT_ENDPOINT` and `APPLICATIONINSIGHTS_CONNECTION_STRING` — are **automatically injected by the Foundry Runtime**, so `azure.yaml` declares only the remaining **9**. Those 9 go into `azure.yaml`'s `environmentVariables`; for the CLI to resolve them at `azd deploy`, they must exist in the environment's own `.env` under `.azure/<env_name>/`.
 
 `azure.yaml` **assumes** those variables exist: if one is missing, `${NAME}` resolves to an **empty string**. Values can be written directly into the `.env`, or set with `azd env set X y`; `azd env get-values` reads them back.
 
@@ -1076,6 +1163,10 @@ environmentVariables:
     value: ${ENABLE_SENSITIVE_DATA}
 ```
 
+**Under what name is the agent published on Foundry?** This is controlled by the **`name` key of the service** being published (`hello-world-python-responses`), as highlighted below:
+
+![VS Code — azure.yaml: under services → hello-world-python-responses, the `name` key (highlighted) controls the name under which the agent is published on Foundry.](images/21-azureyaml-agent-name.png)
+
 Key characteristics of the **environment** `.env`:
 
 - The only pre‑existing variable is `AZURE_ENV_NAME`, added automatically when we create the environment — we leave it.
@@ -1088,7 +1179,7 @@ Key characteristics of the **environment** `.env`:
 
 ```dotenv
 # -- Pre-existing (auto-added by `azd env new`) --
-AZURE_ENV_NAME="hello-world-responses03-dev"
+AZURE_ENV_NAME="hello-world-responses05-dev"
 
 # -- Common --
 AZURE_SUBSCRIPTION_ID=eca2eddb-0f0c-4351-a634-52751499eeea
@@ -1359,4 +1450,4 @@ deactivate
 
 ---
 
-*Document generated from the source Word document “2026-07-17-A Microsoft Foundry Hosted Agents.docx”, translated from Italian to English and reorganized into chapters for publication. All screenshots are the original captures from the source document.*
+*Document generated from the source Word document “2026-07-18-A Microsoft Foundry Hosted Agents.docx”, translated from Italian to English and reorganized into chapters for publication. All screenshots are the original captures from the source document.*
