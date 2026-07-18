@@ -73,7 +73,7 @@ Deployed with a single `azd deploy` (code deploy — no Docker build), the agent
 
 This article is the map; the **complete hands‑on guide** is the territory — 16 chapters with every command, the full `main.py` / `utils.py` / `monitoring.py`, the Key Vault + RBAC setup, Application Insights observability, the `azure.yaml` and `azd` provisioning/deployment flow, and all 24 screenshots:
 
-👉 **[Microsoft Foundry Hosted Agents — End‑to‑End Guide on GitHub](https://github.com/maurominella/<GH_REPO>)**
+👉 **[Microsoft Foundry Hosted Agents — End‑to‑End Guide on GitHub](https://github.com/maurominella/hosted_agents/blob/main/agents/README.md)**
 
 If you're evaluating agent hosting on Foundry — or you just need delegated (OBO) access from an agent to Microsoft Graph — clone it, follow along, and you'll have a working, deployed agent by the end.
 
