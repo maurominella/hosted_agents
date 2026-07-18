@@ -1447,7 +1447,3 @@ deactivate
 > If a package installs locally with `uv` but fails in the build with `pip`, the cause is almost always a package `pip` cannot fetch (like `hyperlight-sandbox-backend-wasm`): declare only the specific sub‑packages you actually use, never the meta.
 
 [↑ Back to top](#table-of-contents)
-
----
-
-*Document generated from the source Word document “2026-07-18-A Microsoft Foundry Hosted Agents.docx”. All screenshots are the original captures from the source document.*
