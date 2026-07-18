@@ -41,7 +41,7 @@ Onboarding, audience, and RBAC update. Derived from the source material
 ## [1.0.0] - 2026-07-17
 
 Initial public release of the **Microsoft Foundry Hosted Agents — End‑to‑End Guide**,
-translated to English and reorganized into 16 chapters. It is meant to take a reader
+organized into 16 chapters. It is meant to take a reader
 from zero to a working, deployed agent, while also serving as reference documentation.
 Derived from the source material "2026-07-17-A Microsoft Foundry Hosted Agents".
 

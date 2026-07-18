@@ -1450,4 +1450,4 @@ deactivate
 
 ---
 
-*Document generated from the source Word document “2026-07-18-A Microsoft Foundry Hosted Agents.docx”, translated from Italian to English and reorganized into chapters for publication. All screenshots are the original captures from the source document.*
+*Document generated from the source Word document “2026-07-18-A Microsoft Foundry Hosted Agents.docx”. All screenshots are the original captures from the source document.*
