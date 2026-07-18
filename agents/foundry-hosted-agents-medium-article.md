@@ -27,7 +27,7 @@ Foundry ships hosting libraries for three styles — **Agent Framework**, **Lang
 
 I picked **Bring‑Your‑Own**, for one blunt reason: the Agent Framework adapter doesn't expose the raw invocation headers, and I needed `x-client-*`. With BYO I write the request handler myself — a little more code, but full access to `context`. (I still use the **Microsoft Agent Framework** for the *agent* itself; it's additive.)
 
-![Listing the available samples with `azd ai agent sample list` — the minimal "Hello World (Responses, without a framework, Python)" is the bring‑your‑own starting point.](https://raw.githubusercontent.com/<GH_USER>/<GH_REPO>/main/images/07-agent-sample-list.png)
+![Listing the available samples with `azd ai agent sample list` — the minimal "Hello World (Responses, without a framework, Python)" is the bring‑your‑own starting point.](https://raw.githubusercontent.com/maurominella/hosted_agents/main/agents/images/07-agent-sample-list.png)
 *Choosing the host, not the framework: the bring‑your‑own Responses sample.*
 
 ## The payoff: one handler, the user's token, and a tool
@@ -59,21 +59,21 @@ graph_token = result["access_token"]  # aud = https://graph.microsoft.com
 
 The OBO client secret never lives in `.env` or in the image. It sits in **Azure Key Vault**, read at runtime with `DefaultAzureCredential`. The twist that trips people up: **locally** the code reads the vault with your `az login` identity; **in the container**, it reads it with the agent's own **Agent Identity (Microsoft Entra Agent ID)** — a per‑instance service principal you can only see *after* deployment, and to which you grant **Key Vault Secrets User**.
 
-![The agent's own Entra Agent ID, visible in the Foundry portal only after deployment.](https://raw.githubusercontent.com/<GH_USER>/<GH_REPO>/main/images/12-agent-identity-foundry-portal.png)
+![The agent's own Entra Agent ID, visible in the Foundry portal only after deployment.](https://raw.githubusercontent.com/maurominella/hosted_agents/main/agents/images/12-agent-identity-foundry-portal.png)
 *Egress identity: the agent reaches Key Vault and Graph under its own Entra Agent ID — not the caller's, not a shared account.*
 
 ## The result
 
 Deployed with a single `azd deploy` (code deploy — no Docker build), the agent goes live as an immutable version. Invoked with the Foundry auth token **plus** the user‑delegated token, it does the full round trip: reads the header, runs the MAF agent, calls the OneDrive tool, exchanges the token On‑Behalf‑Of, and answers using the user's own files.
 
-![The deployed agent answering a OneDrive question end‑to‑end, using On‑Behalf‑Of access to Microsoft Graph.](https://raw.githubusercontent.com/<GH_USER>/<GH_REPO>/main/images/24-final-invocation-result.png)
+![The deployed agent answering a OneDrive question end‑to‑end, using On‑Behalf‑Of access to Microsoft Graph.](https://raw.githubusercontent.com/maurominella/hosted_agents/main/agents/images/24-final-invocation-result.png)
 *The full round trip working: create → test locally → deploy → invoke as the user.*
 
 ## Read the full, step‑by‑step guide
 
 This article is the map; the **complete hands‑on guide** is the territory — 16 chapters with every command, the full `main.py` / `utils.py` / `monitoring.py`, the Key Vault + RBAC setup, Application Insights observability, the `azure.yaml` and `azd` provisioning/deployment flow, and all 24 screenshots:
 
-👉 **[Microsoft Foundry Hosted Agents — End‑to‑End Guide on GitHub](https://github.com/<GH_USER>/<GH_REPO>)**
+👉 **[Microsoft Foundry Hosted Agents — End‑to‑End Guide on GitHub](https://github.com/maurominella/<GH_REPO>)**
 
 If you're evaluating agent hosting on Foundry — or you just need delegated (OBO) access from an agent to Microsoft Graph — clone it, follow along, and you'll have a working, deployed agent by the end.
 
