@@ -3,8 +3,8 @@ import logging
 from dotenv import load_dotenv
 load_dotenv()  # MUST be first: env vars must be set before any import reads them
 
-THISAPP_NAME = "hello-world-python-responses05"
-
+THISAPP_NAME = os.environ.get("THISAPP_NAME","UNKNOWN_APP")  # e.g. "hello-world-python-responses"
+ 
 # --- Azure Monitor setup ---------------------------------------------------
 # We configure Azure Monitor OURSELVES at INFO level so our logger.info() traces
 # reach Application Insights. The agentserver runtime also configures OpenTelemetry
@@ -12,13 +12,12 @@ THISAPP_NAME = "hello-world-python-responses05"
 #   "Overriding of current LoggerProvider is not allowed"
 #   "Overriding of current TracerProvider is not allowed"
 # These are cosmetic only: they fire once at startup and do not affect runtime.
+# In Application Insights Logs, you can filter for our logs with:
+# traces
+# | where cloud_RoleName == "THISAPP_NAME"
 if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
-    # Give this app a distinct cloud role name so ALL its telemetry (traces, requests,
-    # dependencies) is stamped with cloud_RoleName == this value. This is what lets you
-    # isolate it in a shared Application Insights resource (e.g. away from APIM noise).
-    # Must be set BEFORE configure_azure_monitor() reads the environment.
     os.environ.setdefault("OTEL_SERVICE_NAME", THISAPP_NAME)  # e.g. "hello-world-python-responses"
- 
+
     from azure.monitor.opentelemetry import configure_azure_monitor
     configure_azure_monitor(logging_level=logging.INFO)  # capture INFO+ in App Insights (default is WARNING)
 
