@@ -3,7 +3,7 @@ import logging
 from dotenv import load_dotenv
 load_dotenv()  # MUST be first: env vars must be set before any import reads them
 
-THISAPP_NAME = os.environ.get("THISAPP_NAME","UNKNOWN_APP")  # e.g. "hello-world-python-responses"
+THISAPP_NAME = os.environ.get("THISAPP_NAME","UNKNOWN_APP")
  
 # --- Azure Monitor setup ---------------------------------------------------
 # We configure Azure Monitor OURSELVES at INFO level so our logger.info() traces
@@ -16,7 +16,7 @@ THISAPP_NAME = os.environ.get("THISAPP_NAME","UNKNOWN_APP")  # e.g. "hello-world
 # traces
 # | where cloud_RoleName == "THISAPP_NAME"
 if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
-    os.environ.setdefault("OTEL_SERVICE_NAME", THISAPP_NAME)  # e.g. "hello-world-python-responses"
+    os.environ["OTEL_SERVICE_NAME"] = THISAPP_NAME  # force: wins over Aspire's auto-injected value
 
     from azure.monitor.opentelemetry import configure_azure_monitor
     configure_azure_monitor(logging_level=logging.INFO)  # capture INFO+ in App Insights (default is WARNING)
