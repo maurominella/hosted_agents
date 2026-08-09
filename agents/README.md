@@ -80,7 +80,7 @@ The document serves **two distinct profiles**, at different depths:
 
 ### Required rights
 
-- **Owner** on the Azure Subscription — to create resources, assign RBAC roles, and manage identities.
+- **Owner** on the Azure Subscription — to create resources, assign [RBAC roles](https://learn.microsoft.com/en-us/azure/foundry/concepts/rbac-foundry?tabs=owner%2Cfoundry#built-in-roles), and manage identities.
 - **Administrator** on the development machine — to install tooling (`azd`, `uv`, optionally Docker) and manage local certificates/credentials.
 
 ### Tools to install
