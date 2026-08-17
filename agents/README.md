@@ -672,7 +672,7 @@ Here are the steps:
 
 1. **Duplicate `.env` into `.env.docker`** and add the following 3 lines, so Docker can authenticate to Foundry with a **service principal** that is a *Foundry Agent Consumer* of that project (or agent). Please note that **these label names are fixed** (the names `DefaultAzureCredential` looks for):
 
-   ```dotenv
+   ```bash
    AZURE_TENANT_ID=3ad0b905-34ab-4116-93d9-c1dcc2d35af6
    AZURE_CLIENT_ID=b0cc68f2-87d7-491d-8cc2-60624256126e
    AZURE_CLIENT_SECRET=4bp***
@@ -1287,11 +1287,12 @@ azd env new hello-world-responses02-dev
 
 ![VS Code Explorer showing the .azure/ folder expanded: the newly created hello-world-responses05-dev environment with .env, .env.lock, config.json, and .gitignore, alongside src/hello-world-python-responses.](images/20-azd-environment-created.png)
 
-> ⚠️ **Do not confuse** this with a possible `.env` in the project root (the one `load_dotenv()` uses in `monitoring.py` for the local `python main.py` run): that is a **different** file, for a **different** purpose. The one under `.azure/…/` belongs only to `azd`.
+> ⚠️ **Do not confuse** this with a possible `.env` in the project root (the one `load_dotenv()` uses in `monitoring.py` for the local `python main.py` run): that is a **different** file, for a **different** purpose. The file `.azure/hello-world-responses02-dev/.env` belongs only to `azd`.
 
 ### 16.2 Container environment variables
 
-**Locally, the agent needs all 11 variables** (see [6.3](#63-variables-for-running-the-agent-the-env-file)) — there is no Foundry Runtime on your machine to inject anything. **On Foundry**, two of them — `FOUNDRY_PROJECT_ENDPOINT` and `APPLICATIONINSIGHTS_CONNECTION_STRING` — are **automatically injected by the Foundry Runtime**, so `azure.yaml` declares only the remaining **9**. Those 9 go into `azure.yaml`'s `environmentVariables`; for the CLI to resolve them at `azd deploy`, they must exist in the environment's own `.env` under `.azure/<env_name>/`.
+- **Locally, the agent needs all 11 variables** (see [6.3](#63-variables-for-running-the-agent-the-env-file)) — there is no Foundry Runtime on your machine to inject anything. 
+- **On Foundry**, two of them — `FOUNDRY_PROJECT_ENDPOINT` and `APPLICATIONINSIGHTS_CONNECTION_STRING` — are **automatically injected by the Foundry Runtime**, so `azure.yaml` declares only the remaining **9**. Those 9 go into `azure.yaml`'s `environmentVariables`; for the CLI to resolve them at `azd deploy`, they must exist in the environment's own `.env` under `.azure/<env_name>/`.
 
 `azure.yaml` **assumes** those variables exist: if one is missing, `${NAME}` resolves to an **empty string**. Values can be written directly into the `.env`, or set with `azd env set X y`; `azd env get-values` reads them back.
 
@@ -1333,7 +1334,7 @@ Key characteristics of the **environment** `.env`:
 
 **Minimal environment `.env` (grouped):**
 
-```dotenv
+```bash
 # -- Pre-existing (auto-added by `azd env new`) --
 AZURE_ENV_NAME="hello-world-responses05-dev"
 
@@ -1407,7 +1408,7 @@ Two cases:
 
 For the **new‑project** path, `azd provision` creates everything:
 
-```console
+```bash
 mauromi@mauromistudio01:~/git_repos/hosted_agents/agents/hello-world-responses01$ azd provision
 Provisioning Azure resources (azd provision)
 Provisioning Azure resources can take some time.
