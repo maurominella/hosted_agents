@@ -661,13 +661,16 @@ When we add MAF: `await agent.run(text)` → non‑streaming → maps to `TextRe
 
 [↑ Back to top](#table-of-contents)
 
----
 
 ## 10. Adding a Dockerfile (Optional)
+In this context, testing the agent within a local Docker container is **not strictly needed**, because later we do a **code deployment**, not a **container deployment**. Still, it is useful to see and costs very little. 
 
-In this context a Dockerfile is **not strictly needed**, because later we do a **code deployment**, not a **container deployment**. Still, it is useful to see and costs very little. The steps:
 
-1. **Duplicate `.env` into `.env.docker`** and add the last 3 lines, so Docker can authenticate to Foundry with a **service principal** that is a *Foundry Agent Consumer* of that project (or agent). **These label names are fixed** (the names `DefaultAzureCredential` looks for):
+**IMPORTANT**: the identity specified in .env.docker, in this case, uses the Foundry project only to invoke the OpenAI service that the hosted agent uses internally to generate the user question. In other words, in this case we're not using any "Foundry Agents", but we're only using the "Foundry Project" to access its deployments. As a result, the identity specified in .env.docker needs the `Cognitive Services OpenAI User` RBAC role, ***NOT*** the `Foundry User` or `Foundry Agent Consumer`.
+
+Here are the steps:
+
+1. **Duplicate `.env` into `.env.docker`** and add the following 3 lines, so Docker can authenticate to Foundry with a **service principal** that is a *Foundry Agent Consumer* of that project (or agent). Please note that **these label names are fixed** (the names `DefaultAzureCredential` looks for):
 
    ```dotenv
    AZURE_TENANT_ID=3ad0b905-34ab-4116-93d9-c1dcc2d35af6
@@ -728,6 +731,9 @@ The downloaded project already works: the handler calls the Foundry model via th
 **Prerequisite (dependencies):** add `agent-framework` (which brings `agent-framework-foundry` → `FoundryChatClient`). Do **not** add `agent-framework-azure-ai` (incompatible with `1.10`).
 
 ### Step 1 — Imports: add MAF
+```python
+# before: nothing
+```
 
 ```python
 # after
@@ -738,21 +744,36 @@ from agent_framework_foundry import FoundryChatClient
 ### Step 2 — Imports: remove the "raw" Foundry client
 
 ```python
-# before (removed)
+# before (to be removed)
 from azure.ai.projects import AIProjectClient
+```
+
+```python
+# after: nothing
 ```
 
 ### Step 3 — Imports: remove the input‑building models
 
 ```python
-# before (removed)
+# before (to be removed)
 from azure.ai.agentserver.responses.models import (
     MessageContentInputTextContent,
     MessageContentOutputTextContent,
 )
 ```
 
+```python
+# after: nothing
+```
+
 ### Step 4 — Replace the "raw" client with a MAF client + agent
+
+```python
+# before
+_responses_client = AIProjectClient(
+    endpoint=_endpoint, credential=DefaultAzureCredential()
+).get_openai_client().responses
+```
 
 ```python
 # after
@@ -773,22 +794,67 @@ _agent = Agent(
 
 ```python
 # before (removed)
-_ROLE_MAP = {
-    MessageContentOutputTextContent: "assistant",
-    MessageContentInputTextContent: "user",
-}
+_ROLE_MAP = {"output_text": "assistant", "input_text": "user"}
 
 def _build_input(current_input: str, history: list) -> list[dict]:
-    ...
+    """Convert platform history + current message into Responses API input."""
+    items = []
+    for item in history:
+        for content in item.get("content") or []:
+            role = _ROLE_MAP.get(content.get("type"))
+            text = content.get("text")
+            if role and text:
+                items.append({"role": role, "content": text})
+    items.append({"role": "user", "content": current_input})
+    return items
 ```
 
 ### Step 6 — Handler: a single call to the agent
+```python
+# before (we'll keep only the first 11 rows)
+@app.response_handler
+async def handler(
+    request: CreateResponse,
+    context: ResponseContext,
+    _cancellation_signal: asyncio.Event,
+):
+    """Forward user input to the model with conversation history."""
+    user_assertion = context.client_headers.get(os.environ["CLIENT_USER_TOKEN_HEADER"], "")
+    logger.info(f"User assertion: {user_assertion}")
+    
+    user_input = await context.get_input_text() or "Hello!"
+    history = await context.get_history()
+    input_items = _build_input(user_input, history)
+
+    response = await asyncio.get_running_loop().run_in_executor(
+        None,
+        lambda: _responses_client.create(
+            model=_model,
+            instructions=_SYSTEM_PROMPT,
+            input=input_items,
+            store=False,
+        ),
+    )
+
+    return TextResponse(context, request, text=response.output_text)
+```
 
 ```python
-# after
-user_input = await context.get_input_text() or "Hello!"
-result = await _agent.run(user_input)
-return TextResponse(context, request, text=result.text)
+# after (first 11 rows are the same)
+@app.response_handler
+async def handler(
+    request: CreateResponse,
+    context: ResponseContext,
+    _cancellation_signal: asyncio.Event,
+):
+    """Forward user input to the model with conversation history."""
+    user_assertion = context.client_headers.get(os.environ["CLIENT_USER_TOKEN_HEADER"], "")
+    logger.info(f"User assertion: {user_assertion}")
+    
+    user_input = await context.get_input_text() or "Hello!"
+    user_input = await context.get_input_text() or "Hello!"
+    result = await _agent.run(user_input)
+    return TextResponse(context, request, text=result.text)
 ```
 
 **Unchanged:** `app = ResponsesAgentServerHost(...)`, the `@app.response_handler` decorator, `TextResponse`, and the rest of the host.
@@ -810,14 +876,15 @@ Give the app a **dedicated cloud role name**, so every trace is stamped with a u
 > Only the two highlighted parts below must be added (2 instructions + 4 comment lines).
 
 ```python
+# before
+
 import os
 import logging
 from dotenv import load_dotenv
-
 load_dotenv()  # MUST be first: env vars must be set before any import reads them
 
-THISAPP_NAME = "hello-world-python-responses"
-
+THISAPP_NAME = os.environ.get("THISAPP_NAME","UNKNOWN_APP")
+ 
 # --- Azure Monitor setup ---------------------------------------------------
 # We configure Azure Monitor OURSELVES at INFO level so our logger.info() traces
 # reach Application Insights. The agentserver runtime also configures OpenTelemetry
@@ -825,6 +892,38 @@ THISAPP_NAME = "hello-world-python-responses"
 #   "Overriding of current LoggerProvider is not allowed"
 #   "Overriding of current TracerProvider is not allowed"
 # These are cosmetic only: they fire once at startup and do not affect runtime.
+# In Application Insights Logs, you can filter for our logs with:
+# traces
+# | where cloud_RoleName == "THISAPP_NAME"
+if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
+    os.environ["OTEL_SERVICE_NAME"] = THISAPP_NAME  # force: wins over Aspire's auto-injected value
+
+    from azure.monitor.opentelemetry import configure_azure_monitor
+    configure_azure_monitor(logging_level=logging.INFO)  # capture INFO+ in App Insights (default is WARNING)
+```
+
+
+```python
+# after
+
+import os
+import logging
+from dotenv import load_dotenv
+load_dotenv()  # MUST be first: env vars must be set before any import reads them
+
+THISAPP_NAME = "hello-world-python-responses02"
+
+ 
+# --- Azure Monitor setup ---------------------------------------------------
+# We configure Azure Monitor OURSELVES at INFO level so our logger.info() traces
+# reach Application Insights. The agentserver runtime also configures OpenTelemetry
+# internally, so the double setup may emit two harmless one-time startup warnings:
+#   "Overriding of current LoggerProvider is not allowed"
+#   "Overriding of current TracerProvider is not allowed"
+# These are cosmetic only: they fire once at startup and do not affect runtime.
+# In Application Insights Logs, you can filter for our logs with:
+# traces
+# | where cloud_RoleName == "THISAPP_NAME"
 if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
     # Give this app a distinct cloud role name so ALL its telemetry (traces, requests,
     # dependencies) is stamped with cloud_RoleName == this value. This is what lets you
@@ -833,12 +932,12 @@ if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
     os.environ.setdefault("OTEL_SERVICE_NAME", THISAPP_NAME)  # e.g. "hello-world-python-responses"
 
     from azure.monitor.opentelemetry import configure_azure_monitor
-    configure_azure_monitor(logging_level=logging.INFO)  # capture INFO+ (default is WARNING)
+    configure_azure_monitor(logging_level=logging.INFO)  # capture INFO+ in App Insights (default is WARNING)
 ```
 
 A KQL query to extract all logs tied to our agent:
 
-```kql
+```sql
 traces
 | where cloud_RoleName == "hello-world-python-responses"
 | project timestamp, message, severityLevel, operation_Id, cloud_RoleName
@@ -853,11 +952,9 @@ traces
 
 So `severityLevel` and `!startswith "Inbound POST"` are a **fragile, imprecise** filter.
 
-### 12.3 The fix: a custom dimension via a log filter
+### 12.3 The fix (already integrated): a custom dimension via a log filter
 
 The most reliable way to isolate only the messages written by our code is to **stamp them** with a property we control. We add a logging filter that appends `log_source="app"` to every record from our logger:
-
-> Only the highlighted part (the filter class and its registration) must be added.
 
 ```python
 # Configure logging - WARNING for everything else, while INFO for this module only
@@ -880,9 +977,9 @@ if not logger.handlers:                      # avoid duplicate handlers on reloa
 
 Now run, ask a question, and use this query to see **only** the logs written by our code:
 
-```kql
+```sql
 traces
-| where cloud_RoleName == "hello-world-python-responses"
+| where cloud_RoleName == "hello-world-python-responses02"
 | where customDimensions.log_source == "app"
 | project timestamp, message, severityLevel, operation_Id
 | order by timestamp desc
@@ -1079,6 +1176,73 @@ app.run()
 ```
 
 > The `ContextVar` is a **per‑request** variable: it prevents concurrent requests from overwriting each other, which would happen with a normal global variable.
+
+
+#### Great! Now we can run our main.py again, and test its ability to invoke MS Chart 
+```bash
+
+@baseUrl = http://localhost:8088
+@query = Give me the list of folders in my OneDrive root, sorted decreasing size (in Mb). Answer in Italian.
+
+
+POST {{baseUrl}}/responses
+Content-Type: application/json
+Authorization: Bearer {{bearertoken_user-token_for_foundry}}
+x-client-user-token: {{bearertoken_for_obo}}
+ 
+{
+    "input": "{{query}}"
+}
+```
+
+The output should look like this one:
+```bash
+HTTP/1.1 200 
+x-agent-session-id: 5d223a59f400f617e4118fea84cd54f4f1f2a8b5d8358d019deec13d21be7d1
+content-length: 1158
+content-type: application/json
+x-request-id: 9c521846cdb446a4a358af05b9a198ee
+x-platform-server: azure-ai-agentserver-core/2.1.0b1 (python/3.13) azure-ai-agentserver-responses/2.1.0b1 (python/3.13)
+date: Mon, 17 Aug 2026 15:52:53 GMT
+server: hypercorn-h11
+Connection: close
+
+{
+  "id": "caresp_ac9f593d3ca762ff00iM706w9uUsz5I0i5sOCZ3pSttH4jqquO",
+  "object": "response",
+  "output": [
+    {
+      "type": "message",
+      "id": "msg_ac9f593d3ca762ff00Dv6Dkk23uMgNCka4FlB7tgCivJbWAFX1",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Ecco la lista delle cartelle del tuo OneDrive, ordinate per dimensione decrescente:\n\n1. **deleteme** — **12,56 MB**\n2. **Meetings** — **5,78 MB**\n3. **Apps** — **3,47 MB**\n4. **Microsoft Copilot Chat Files** — **2,31 MB**\n5. **Attachments** — **1,16 MB**\n6. **Recordings** — **1,16 MB**\n7. **Documents** — **0 MB**\n\nSe vuoi, posso anche ordinarle per numero di elementi contenuti.",
+          "annotations": [],
+          "logprobs": []
+        }
+      ],
+      "status": "completed",
+      "response_id": "caresp_ac9f593d3ca762ff00iM706w9uUsz5I0i5sOCZ3pSttH4jqquO",
+      "agent_reference": null
+    }
+  ],
+  "created_at": 1786981973,
+  "parallel_tool_calls": false,
+  "status": "completed",
+  "completed_at": 1786981973,
+  "response_id": "caresp_ac9f593d3ca762ff00iM706w9uUsz5I0i5sOCZ3pSttH4jqquO",
+  "agent_reference": {
+    "type": "agent_reference",
+    "name": "server-default-agent"
+  },
+  "model": "",
+  "agent_session_id": "5d223a59f400f617e4118fea84cd54f4f1f2a8b5d8358d019deec13d21be7d1",
+  "background": false
+}
+```
+
 
 [↑ Back to top](#table-of-contents)
 
