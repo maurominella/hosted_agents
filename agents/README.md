@@ -480,7 +480,7 @@ ENABLE_SENSITIVE_DATA=true
 
 There are **two separate, independent planes** — the first is *"who gets in"*, the second is *"with which identity the agent presents itself to the outside"*.
 
-**1) Ingress — who can invoke the agent.** The caller (a user or a service principal) must hold the **Foundry Agent Consumer** role **on the project** (not on the agent) — the least‑privilege invoke role introduced in July 2026 (see the [RBAC roles update](#important--rbac-roles-update-july-2026)). This governs invocation access.
+**1) Ingress — who can invoke the agent.** The caller (a user or a service principal or a Managed Identity) must hold the **Foundry Agent Consumer** role **on the project** (not on the agent) — the least‑privilege invoke role introduced in July 2026 (see the [RBAC roles update](#important--rbac-roles-update-july-2026)). This governs invocation access.
 
 **2) Egress — with which identity the agent accesses remote resources** *(we obtain this identity only after the deployment).* The agent runs under its own **Agent Identity (Microsoft Entra Agent ID)**: a **per‑instance service principal**, distinct both from the caller and from the Foundry account's managed identity. Roles on resources (e.g. **Key Vault Secrets User**) are assigned to **this** identity.
 
