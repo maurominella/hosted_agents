@@ -11,7 +11,6 @@ import os
 
 from monitoring import logger
 
-from azure.ai.projects import AIProjectClient
 from azure.identity import DefaultAzureCredential
 
 from azure.ai.agentserver.responses import (
@@ -22,33 +21,57 @@ from azure.ai.agentserver.responses import (
     TextResponse,
 )
 
+from agent_framework import Agent
+from agent_framework_foundry import FoundryChatClient
+
+from utils import onedrive_root_folders
+import contextvars
+
+# Per-request user assertion (Token C), exposed to tools via a ContextVar so it is
+# NOT an LLM-visible tool parameter. The handler sets it; the tool reads it.
+_current_user_assertion: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "current_user_assertion", default=""
+)
+
+from azure.keyvault.secrets import SecretClient
+
+os.environ["APP_OBO_CLIENT_SECRET"] = SecretClient(
+    vault_url=os.environ["KEY_VAULT_URL"],
+    credential=DefaultAzureCredential(),
+).get_secret(os.environ["APP_OBO_CLIENT_SECRET_NAME"]).value
+
+
 _endpoint = os.environ["FOUNDRY_PROJECT_ENDPOINT"]
 _model = os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"]
 
-_responses_client = AIProjectClient(
-    endpoint=_endpoint, credential=DefaultAzureCredential()
-).get_openai_client().responses
+_SYSTEM_PROMPT = "You are a helpful AI assistant. Be concise and informative."
+
+_chat_client = FoundryChatClient(
+    project_endpoint=_endpoint,
+    model=_model,
+    credential=DefaultAzureCredential(),
+)
+
+async def onedrive_root_folders_async() -> str:
+    """Return the name and size of all folders in the signed-in user's OneDrive root.
+    Use ONLY for questions about the user's own OneDrive files or folders (e.g.
+    "what is the biggest folder in my OneDrive?")."""
+    assertion = _current_user_assertion.get()
+    if not assertion:
+        return "No user token is available, so I cannot access the user's OneDrive."
+    # token_exchange + Graph REST are blocking -> run off the event loop.
+    return await asyncio.to_thread(onedrive_root_folders, assertion)
+
+_agent = Agent(
+    _chat_client,                 # 1st positional = client
+    _SYSTEM_PROMPT,               # 2nd positional = instructions
+    name="BYO Responses Agent",
+    tools=[onedrive_root_folders_async],                # <-- MAF tools go here
+)
 
 app = ResponsesAgentServerHost(
     options=ResponsesServerOptions(default_fetch_history_count=20),
 )
-
-_SYSTEM_PROMPT = "You are a helpful AI assistant. Be concise and informative."
-
-_ROLE_MAP = {"output_text": "assistant", "input_text": "user"}
-
-def _build_input(current_input: str, history: list) -> list[dict]:
-    """Convert platform history + current message into Responses API input."""
-    items = []
-    for item in history:
-        for content in item.get("content") or []:
-            role = _ROLE_MAP.get(content.get("type"))
-            text = content.get("text")
-            if role and text:
-                items.append({"role": role, "content": text})
-    items.append({"role": "user", "content": current_input})
-    return items
-
 
 @app.response_handler
 async def handler(
@@ -57,24 +80,12 @@ async def handler(
     _cancellation_signal: asyncio.Event,
 ):
     """Forward user input to the model with conversation history."""
-    user_assertion = context.client_headers.get(os.environ["CLIENT_USER_TOKEN_HEADER"], "")
-    logger.info(f"User assertion: {user_assertion}")
-    
     user_input = await context.get_input_text() or "Hello!"
-    history = await context.get_history()
-    input_items = _build_input(user_input, history)
+    user_assertion = context.client_headers.get(os.environ["CLIENT_USER_TOKEN_HEADER"], "")
+    logger.info(f"User assertion received. Length: {len(user_assertion)}.")
+    _current_user_assertion.set(user_assertion)
 
-    response = await asyncio.get_running_loop().run_in_executor(
-        None,
-        lambda: _responses_client.create(
-            model=_model,
-            instructions=_SYSTEM_PROMPT,
-            input=input_items,
-            store=False,
-        ),
-    )
-
-    return TextResponse(context, request, text=response.output_text)
-
+    result = await _agent.run(user_input)
+    return TextResponse(context, request, text=result.text)
 
 app.run()
