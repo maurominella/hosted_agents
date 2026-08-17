@@ -341,21 +341,13 @@ Among all the Foundry samples, the one we want is **Hello World agent (Responses
 
 > **Note:** the target project must contain the `gpt-5.4-mini` deployment.
 
-Inside `requirements.txt`, remove what **uv** does not like — **every empty line** and **the comment line** — then add the libraries listed at the bottom:
-
-```text
-python-dotenv==1.2.2
-azure-monitor-opentelemetry==1.8.9
-agent-framework-core==1.11.0
-agent-framework-foundry==1.0.1
-azure-keyvault-secrets==4.11.0
-```
+Inside `requirements.txt`, remove what **uv** does not like — **every empty line** and **the comment line**:
 
 Clone the sample into a fresh destination folder and open it in VS Code:
 
 ```bash
 # 1. choose the target folder name
-folder_name=hello-world-responses03
+folder_name=hello-world-responses02
 
 # 2. delete the target folder if it exists
 rm -rf "./$folder_name"
@@ -383,7 +375,18 @@ cd "./$folder_name"
 code .
 ```
 
+Now add the following libraries:
+
+```text
+python-dotenv==1.2.3
+azure-monitor-opentelemetry==1.8.9
+agent-framework-core==1.11.0
+agent-framework-foundry==1.0.1
+azure-keyvault-secrets==4.11.1
+```
+
 ![VS Code opened on the cloned project HELLO-WORLD-RESPONSES (WSL: Ubuntu). The Explorer shows src/hello-world-python-responses with .azdignore, .dockerignore, .env.example, Dockerfile, main.py, requirements.txt; requirements.txt is open with the added libraries highlighted.](images/08-cloned-project-requirements.png)
+
 
 ### 6.2 Create the environment and verify the imports
 
@@ -406,12 +409,10 @@ print('ALL IMPORTS OK')
 "
 ```
 
-Expected output (the experimental warnings are normal):
+Expected output:
 
 ```text
 Resolving despite existing lockfile due to change in pre-release mode: `allow` vs. `if-necessary-or-explicit`
-.../agent_framework/_skills.py:122: ExperimentalWarning: [SKILLS] SkillResource is experimental and may change or be removed in future versions without notice.
-.../agent_framework/_harness/_file_access.py:602: ExperimentalWarning: [HARNESS] AgentFileStore is experimental and may change or be removed in future versions without notice.
 ALL IMPORTS OK
 ```
 
