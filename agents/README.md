@@ -544,8 +544,10 @@ The next three screenshots show how to retrieve the **agent's identity** inside 
 
 ### 8.1 Add `monitoring.py` (and fix the logger in `main.py`)
 
-Add [`monitoring.py`](https://github.com/maurominella/hosted_agents/blob/main/agents/_common/monitoring.py), and import it in `main.py` — remembering that `load_dotenv()` is called inside `monitoring`. Also import **`utils.py`** (the Graph/OBO helpers we'll flesh out in [Chapter 14](#14-adding-a-tool-to-the-maf-agent-graph--obo)).
-
+Add two files to this project:
+- [`monitoring.py`](https://github.com/maurominella/hosted_agents/blob/main/agents/_common/monitoring.py), and import it in `main.py` — remembering that `load_dotenv()` is called inside `monitoring`.
+- [**`utils.py`**](https://github.com/maurominella/hosted_agents/blob/main/agents/_common/utils.py) (the Graph/OBO helpers we'll flesh out in [Chapter 14](#14-adding-a-tool-to-the-maf-agent-graph--obo)).
+---
 **Fundamental logging detail:** in `main.py` the `logger` imported from `monitoring` is **overwritten** by the line `logger = logging.getLogger(__name__)`, so our logging settings and filters would **not** be applied to our logs. We remove that line (and the now‑redundant `import logging`) so the logger configuration set in `monitoring.py` is actually used:
 
 ![VS Code main.py imports. Green "ADD THIS LINE" on `from monitoring import logger`; red "DELETE THIS LINE" on `import logging` and on `logger = logging.getLogger(__name__)`.](images/15-mainpy-logger-edits.png)

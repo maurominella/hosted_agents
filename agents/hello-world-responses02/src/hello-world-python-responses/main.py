@@ -7,8 +7,9 @@ the reply back through the Responses protocol. See README.md for setup.
 """
 
 import asyncio
-import logging
 import os
+
+from monitoring import logger
 
 from azure.ai.projects import AIProjectClient
 from azure.identity import DefaultAzureCredential
@@ -20,7 +21,6 @@ from azure.ai.agentserver.responses import (
     ResponsesServerOptions,
     TextResponse,
 )
-logger = logging.getLogger(__name__)
 
 _endpoint = os.environ["FOUNDRY_PROJECT_ENDPOINT"]
 _model = os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"]
