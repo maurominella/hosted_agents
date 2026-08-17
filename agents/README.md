@@ -354,24 +354,24 @@ azure-keyvault-secrets==4.11.0
 Clone the sample into a fresh destination folder and open it in VS Code:
 
 ```bash
+# 1. choose the target folder name
 folder_name=hello-world-responses03
-
-# 1. delete the target folder if it exists
+# 2. delete the target folder if it exists
 rm -rf "./$folder_name"
-# 2. delete the cloning folder (removed again later too)
+# 3. delete the cloning folder (removed again later too)
 rm -rf foundry-samples
-# 3. clone the repo
+# 4. clone the repo
 git clone --depth 1 https://github.com/microsoft-foundry/foundry-samples.git
-# 4. create the target folder
+# 5. create the target folder
 mkdir -p "./$folder_name"
-# 5. copy the hello-world source into the target folder
+# 6. copy the hello-world source into the target folder
 cp -r foundry-samples/samples/python/hosted-agents/bring-your-own/responses/hello-world/* \
   "./$folder_name/"
-# 6. remove the cloned folder
+# 7. remove the cloned folder
 rm -rf foundry-samples
-# 7. cd into the new folder
+# 8. cd into the new folder
 cd "./$folder_name"
-# 8. open VS Code
+# 9. open VS Code
 code .
 ```
 
