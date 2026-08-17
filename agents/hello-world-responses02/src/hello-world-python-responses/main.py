@@ -57,6 +57,9 @@ async def handler(
     _cancellation_signal: asyncio.Event,
 ):
     """Forward user input to the model with conversation history."""
+    user_assertion = context.client_headers.get(os.environ["CLIENT_USER_TOKEN_HEADER"], "")
+    logger.info(f"User assertion: {user_assertion}")
+    
     user_input = await context.get_input_text() or "Hello!"
     history = await context.get_history()
     input_items = _build_input(user_input, history)

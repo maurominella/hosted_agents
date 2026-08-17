@@ -546,7 +546,7 @@ The next three screenshots show how to retrieve the **agent's identity** inside 
 
 Add two files to this project:
 - [`monitoring.py`](https://github.com/maurominella/hosted_agents/blob/main/agents/_common/monitoring.py), and import it in `main.py` — remembering that `load_dotenv()` is called inside `monitoring`.
-- [**`utils.py`**](https://github.com/maurominella/hosted_agents/blob/main/agents/_common/utils.py) (the Graph/OBO helpers we'll flesh out in [Chapter 14](#14-adding-a-tool-to-the-maf-agent-graph--obo)).
+- [`utils.py`](https://github.com/maurominella/hosted_agents/blob/main/agents/_common/utils.py) (the Graph/OBO helpers we'll flesh out in [Chapter 14](#14-adding-a-tool-to-the-maf-agent-graph--obo)).
 ---
 **Fundamental logging detail:** in `main.py` the `logger` imported from `monitoring` is **overwritten** by the line `logger = logging.getLogger(__name__)`, so our logging settings and filters would **not** be applied to our logs. We remove that line (and the now‑redundant `import logging`) so the logger configuration set in `monitoring.py` is actually used:
 
@@ -598,33 +598,13 @@ Expected terminal output when the host starts:
 ### 8.3 The handler (bring‑your‑own Responses)
 
 The **key difference** compared to `azure-ai-agentserver-agentframework`: there, `from_agent_framework(agent)` did everything; **here we write the handler ourselves and call the model**. That is the price *and* the power of *bring‑your‑own* — and it gives us access to `context`, hence to the `x-client-*` headers.
-
+Now, add just the following two lines 
 ```python
-@app.response_handler
-async def handler(
-    request: CreateResponse,
-    context: ResponseContext,
-    _cancellation_signal: asyncio.Event,
-):
-    """Forward user input to the model with conversation history."""
-    user_assertion = context.client_headers.get(os.environ["CLIENT_USER_TOKEN_HEADER"], "")
-    logger.info(f"User assertion: {user_assertion}")
-
-    user_input = await context.get_input_text() or "Hello!"
-    history = await context.get_history()
-    input_items = _build_input(user_input, history)
-
-    response = await asyncio.get_running_loop().run_in_executor(
-        None,
-        lambda: _responses_client.create(
-            model=_model,
-            instructions=_SYSTEM_PROMPT,
-            input=input_items,
-            store=False,
-        ),
-    )
-    return TextResponse(context, request, text=response.output_text)
+user_assertion = context.client_headers.get(os.environ["CLIENT_USER_TOKEN_HEADER"], "")
+logger.info(f"User assertion: {user_assertion}")
 ```
+to the `python async def handler` function, and set a breakpoint at the first instruction as shown below:
+![alt text](images/15b-async_def_handler.png)
 
 - We **write the handler ourselves** — in the `agentframework` version it did not exist, because the adapter generated it.
 - We **retrieve the token** transmitted via `CLIENT_USER_TOKEN_HEADER` (i.e. `x-client-user-token`).
