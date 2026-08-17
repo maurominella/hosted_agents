@@ -266,7 +266,7 @@ It is perfect because:
 
 ## 5. Schema Change — July 6, 2026 (`0.1.0-preview` → `1.0.0-beta.4`)
 
-**New publishing extension.** The [`azure.yaml`](https://github.com/microsoft-foundry/foundry-samples/blob/main/samples/python/hosted-agents/bring-your-own/responses/hello-world/azure.yaml) of the BYO sample requires the `azure.ai.agents` extension at version **`>=1.0.0-beta.4`** — this new hosted‑agent publishing library removes the need for Bicep infrastructure (see the next chapter):
+**New publishing extension.** The [`azure.yaml`](https://github.com/microsoft-foundry/foundry-samples/blob/main/samples/python/hosted-agents/bring-your-own/responses/hello-world/azure.yaml) of the BYO sample requires the `azure.ai.agents` extension at version **`>=1.0.0-beta.4`** — this new hosted‑agent publishing library removes the need for Bicep infrastructure, as we see in this chapter:
 
 ```yaml
 requiredVersions:
