@@ -248,7 +248,7 @@ It is perfect because:
 
 ### Two important observations
 
-**Different libraries per sample.** The [Bring‑Your‑Own samplehttps://github.com/microsoft-foundry/foundry-samples/tree/main/samples/python/hosted-agents/bring-your-own/responses/hello-world/src/hello-world-python-responses]() uses the Foundry library **`azure.ai.projects` 2.0.1**, whereas the Agent‑Framework samples use the MAF **Foundry Hosting** library **`1.0.0a260630`**, which has the limitations mentioned earlier — including not being able to read *all* the headers of the Foundry call via the Responses API (on which both samples are based).
+**Different libraries per sample.** The [Bring‑Your‑Own sample](https://github.com/microsoft-foundry/foundry-samples/tree/main/samples/python/hosted-agents/bring-your-own/responses/hello-world/src/hello-world-python-responses) uses the Foundry library **`azure.ai.projects` 2.0.1**, whereas the Agent‑Framework samples use the MAF **Foundry Hosting** library **`1.0.0a260630`**, which has the limitations mentioned earlier — including not being able to read *all* the headers of the Foundry call via the Responses API (on which both samples are based).
 
 | **BYO — requirements.txt** | **Agent Framework — requirements.txt** |
 |----------------------------|----------------------------------------|
