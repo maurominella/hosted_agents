@@ -650,7 +650,7 @@ And the HTTP response comes back `200 OK` with the model's answer:
 
 ### How streaming works here
 
-The client (Playground, Teams, API) decides whether it wants `stream: true` or `false`. When you return a `TextResponse`, it is the **host** that bridges: a non‑streaming client receives the complete response; a streaming client gets your text wrapped in the Responses protocol's streaming events. So our current handler **already works for both Playground and Teams** — no need to handle the two cases by hand.
+The client (Foundry Playground, Teams, API...) decides whether it wants `stream: true` or `false`. When you return a `TextResponse`, it is the **host** that bridges: a non‑streaming client receives the complete response; a streaming client gets your text wrapped in the Responses protocol's streaming events. So our current handler **already works for both Playground and Teams** — no need to handle the two cases by hand.
 
 ### The real difference (true streaming vs. not)
 

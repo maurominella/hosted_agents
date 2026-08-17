@@ -1,0 +1,10 @@
+@baseUrl = http://localhost:8088
+@query = What is a meaning function? Please answer in less than 10 words.
+
+POST {{baseUrl}}/responses
+Content-Type: application/json
+x-client-user-token: aaa
+
+{
+  "input": "{{query}}"
+}
