@@ -102,7 +102,7 @@ This lab requires **two Registered Applications** already configured in your Ent
 
 The tokens are used in local tests via the **VS Code REST Client** (`.http` files). They can be generated with whatever tool you prefer — for example directly with `az account get-access-token` or via the portal. Alternatively, the **`refresh-tokens.sh`** utility reads its configuration from `token-mapping.json` and automatically updates the tokens in `.vscode/settings.json` (dev environment) with a single command: `./refresh-tokens.sh`. The utility supports both **user tokens** (from the current `az login` session) and **application tokens** (client credentials), selectable entry‑by‑entry in `token-mapping.json` via the `app_id` field. For details, see [Chapter 2. Creating the Tokens for the Registered Applications](#2-creating-the-tokens-for-the-registered-applications).
 
-### Important — RBAC roles update (July 2026)
+### Important — [RBAC roles update (July 2026)](https://learn.microsoft.com/en-us/azure/foundry/concepts/rbac-foundry?tabs=owner%2Cfoundry#built-in-roles)
 
 In **July 2026, four new RBAC roles** were introduced for the Foundry Project. A direct consequence for our scenario: the default **least‑privilege** role for **invoking** an agent is no longer **Foundry User** — that role remains valid for **building, developing, and testing** (it allows not only invoking but also modifying the project's agents, reading conversation history, and deleting them — in practice any operation *except* assigning roles to other user principals). Accordingly, we assign the **Foundry Agent Consumer** role to the user principals of this lab, for convenience at the **Foundry Project** scope — though in production it should be scoped to the specific **Foundry Agent**.
 
@@ -480,7 +480,7 @@ ENABLE_SENSITIVE_DATA=true
 
 There are **two separate, independent planes** — the first is *"who gets in"*, the second is *"with which identity the agent presents itself to the outside"*.
 
-**1) Ingress — who can invoke the agent.** The caller (a user or a service principal or a Managed Identity) must hold the **Foundry Agent Consumer** role **on the project** (not on the agent) — the least‑privilege invoke role introduced in July 2026 (see the [RBAC roles update](#important--rbac-roles-update-july-2026)). This governs invocation access.
+**1) Ingress — who can invoke the agent.** Following the "least privilege" principal for strongest security, the caller identity (a user or a service principal or a Managed Identity) should hold the **Foundry Agent Consumer** role **on the project** (not on the agent). Such role was introduced in July 2026 (see the [RBAC roles update](#important--rbac-roles-update-july-2026)). This governs invocation access.
 
 **2) Egress — with which identity the agent accesses remote resources** *(we obtain this identity only after the deployment).* The agent runs under its own **Agent Identity (Microsoft Entra Agent ID)**: a **per‑instance service principal**, distinct both from the caller and from the Foundry account's managed identity. Roles on resources (e.g. **Key Vault Secrets User**) are assigned to **this** identity.
 
