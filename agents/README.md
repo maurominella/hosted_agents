@@ -234,11 +234,13 @@ Regardless of whether we ultimately use MAF, we first list the available samples
 azd ai agent sample list --language python --output json
 ```
 
-As of **July 16, 2026**, there are **18** samples. In particular, there is **Hello World agent (Responses, without a framework, Python)**, described as:
+As of **August 17, 2026**, there are **24** samples. In particular, there is **Hello World agent (Responses, without a framework, Python)**, described as:
 
 > *"Minimal Hello World agent using the Responses protocol with a bring‑your‑own approach. Calls a Foundry model via the Responses API and returns the response."*
 
 ![The JSON output of azd ai agent sample list in the VS Code REST Client view: a templates array of 18 items; item 12 expanded is the Hello World agent (Responses, without a framework, Python), with the highlighted description "Calls a Foundry model via the Responses API and returns the response", and the manifestUrl / initCommand pointing at bring-your-own/responses/hello-world/azure.yaml.](images/07-agent-sample-list.png)
+
+![alt text](image.png)
 
 It is perfect because:
 
@@ -250,13 +252,13 @@ It is perfect because:
 
 **Different libraries per sample.** The Bring‑Your‑Own sample uses the Foundry library **`azure.ai.projects` 2.0.1**, whereas the Agent‑Framework samples use the MAF **Foundry Hosting** library **`1.0.0a260630`**, which has the limitations mentioned earlier — including not being able to read *all* the headers of the Foundry call via the Responses API (on which both samples are based).
 
-```text
-# Bring Your Own — requirements.txt          # Agent Framework — requirements.txt
-azure-ai-agentserver-responses==1.0.0b8       agent-framework-foundry
-azure-ai-projects==2.0.1                       agent-framework-foundry-hosting>=1.0.0a260630
-azure-identity==1.25.3                         debugpy
-debugpy
-```
+| **BYO — requirements.txt** | **Agent Framework — requirements.txt** |
+|----------------------------|----------------------------------------|
+| azure-ai-agentserver-responses==1.0.0b8 | agent-framework-foundry |
+| azure-ai-projects==2.0.1 | agent-framework-foundry-hosting>=1.0.0a260630 |
+| azure-identity==1.25.3 | azure-identity==1.25.3 |
+| debugpy | debugpy |
+
 
 **New publishing extension.** The `azure.yaml` of this sample requires the `azure.ai.agents` extension at version **`>=1.0.0-beta.4`** — the new hosted‑agent publishing library that removes the need for Bicep infrastructure (see the next chapter):
 
