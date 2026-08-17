@@ -1282,7 +1282,7 @@ cd ..
 code . --reuse-window
 
 # Create the environment
-azd env new hello-world-responses05-dev
+azd env new hello-world-responses02-dev
 ```
 
 ![VS Code Explorer showing the .azure/ folder expanded: the newly created hello-world-responses05-dev environment with .env, .env.lock, config.json, and .gitignore, alongside src/hello-world-python-responses.](images/20-azd-environment-created.png)
