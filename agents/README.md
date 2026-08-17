@@ -248,8 +248,8 @@ It is perfect because:
 
 ### Two important observations
 
-**Different libraries per sample.** 
-- The [Bring‑Your‑Own sample](https://github.com/microsoft-foundry/foundry-samples/tree/main/samples/python/hosted-agents/bring-your-own/responses/hello-world) uses the Foundry library **`azure.ai.projects` 2.0.1**, whereas 
+**Different libraries per sample** :
+- the [Bring‑Your‑Own sample](https://github.com/microsoft-foundry/foundry-samples/tree/main/samples/python/hosted-agents/bring-your-own/responses/hello-world) uses the Foundry library **`azure.ai.projects` 2.0.1**, whereas 
 - the [Agent‑Framework samples like the 01-basic](https://github.com/microsoft-foundry/foundry-samples/tree/main/samples/python/hosted-agents/agent-framework/responses/01-basic) use the MAF **Foundry Hosting** library **`1.0.0a260630`**, which has the limitations mentioned earlier — including not being able to read *all* the headers of the Foundry call via the Responses API (on which both samples are based).
 
 | [**BYO — requirements.txt**](https://github.com/microsoft-foundry/foundry-samples/blob/main/samples/python/hosted-agents/bring-your-own/responses/hello-world/src/hello-world-python-responses/requirements.txt) | [**Agent Framework — requirements.txt**](https://github.com/microsoft-foundry/foundry-samples/blob/main/samples/python/hosted-agents/agent-framework/responses/01-basic/src/agent-framework-agent-basic-responses/requirements.txt) |
@@ -260,19 +260,19 @@ It is perfect because:
 | debugpy | debugpy |
 
 
-**New publishing extension.** The `azure.yaml` of this sample requires the `azure.ai.agents` extension at version **`>=1.0.0-beta.4`** — the new hosted‑agent publishing library that removes the need for Bicep infrastructure (see the next chapter):
+[↑ Back to top](#table-of-contents)
+
+---
+
+## 5. Schema Change — July 6, 2026 (`0.1.0-preview` → `1.0.0-beta.4`)
+
+**New publishing extension.** The [`azure.yaml`](https://github.com/microsoft-foundry/foundry-samples/blob/main/samples/python/hosted-agents/bring-your-own/responses/hello-world/azure.yaml) of the BYO sample requires the `azure.ai.agents` extension at version **`>=1.0.0-beta.4`** — this new hosted‑agent publishing library removes the need for Bicep infrastructure (see the next chapter):
 
 ```yaml
 requiredVersions:
   extensions:
     azure.ai.agents: '>=1.0.0-beta.4'
 ```
-
-[↑ Back to top](#table-of-contents)
-
----
-
-## 5. Schema Change — July 6, 2026 (`0.1.0-preview` → `1.0.0-beta.4`)
 
 This change, which happened on **July 6, 2026**, is **not** a simple version bump: it is a **major‑version** jump, from **`0.1.0-preview`** to **`1.0.0-beta.4`** (still in beta), with a restructuring of the definition files.
 
