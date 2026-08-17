@@ -240,8 +240,6 @@ As of **August 17, 2026**, there are **24** samples. In particular, there is **H
 
 ![The JSON output of azd ai agent sample list in the VS Code REST Client view: a templates array of 18 items; item 12 expanded is the Hello World agent (Responses, without a framework, Python), with the highlighted description "Calls a Foundry model via the Responses API and returns the response", and the manifestUrl / initCommand pointing at bring-your-own/responses/hello-world/azure.yaml.](images/07-agent-sample-list.png)
 
-![alt text](image.png)
-
 It is perfect because:
 
 - **Responses protocol + no framework** → it uses `azure-ai-agentserver-responses` (so it reads the `x-client-*` headers).
@@ -250,7 +248,7 @@ It is perfect because:
 
 ### Two important observations
 
-**Different libraries per sample.** The Bring‑Your‑Own sample uses the Foundry library **`azure.ai.projects` 2.0.1**, whereas the Agent‑Framework samples use the MAF **Foundry Hosting** library **`1.0.0a260630`**, which has the limitations mentioned earlier — including not being able to read *all* the headers of the Foundry call via the Responses API (on which both samples are based).
+**Different libraries per sample.** The [Bring‑Your‑Own samplehttps://github.com/microsoft-foundry/foundry-samples/tree/main/samples/python/hosted-agents/bring-your-own/responses/hello-world/src/hello-world-python-responses]() uses the Foundry library **`azure.ai.projects` 2.0.1**, whereas the Agent‑Framework samples use the MAF **Foundry Hosting** library **`1.0.0a260630`**, which has the limitations mentioned earlier — including not being able to read *all* the headers of the Foundry call via the Responses API (on which both samples are based).
 
 | **BYO — requirements.txt** | **Agent Framework — requirements.txt** |
 |----------------------------|----------------------------------------|
