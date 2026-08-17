@@ -380,13 +380,12 @@ Now add the following libraries:
 ```text
 python-dotenv==1.2.3
 azure-monitor-opentelemetry==1.8.9
-agent-framework-core==1.11.0
-agent-framework-foundry==1.0.1
+agent-framework-core==1.14.0
+agent-framework-foundry==1.11.0
 azure-keyvault-secrets==4.11.1
 ```
 
 ![VS Code opened on the cloned project HELLO-WORLD-RESPONSES (WSL: Ubuntu). The Explorer shows src/hello-world-python-responses with .azdignore, .dockerignore, .env.example, Dockerfile, main.py, requirements.txt; requirements.txt is open with the added libraries highlighted.](images/08-cloned-project-requirements.png)
-
 
 ### 6.2 Create the environment and verify the imports
 
