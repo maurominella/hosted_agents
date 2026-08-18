@@ -1581,7 +1581,7 @@ AGENT_HELLO_WORLD_PYTHON_RESPONSES_VERSION=1
 
 ### 16.5 Granting the deployed agent access to Key Vault
 
-The agent's **Egress identity** (see [Chapter 7](#7-storing-secrets-key-vault-and-managed-identity)) only exists **after** the deployment. Now that the agent is deployed, retrieve its **Entra agent identity** from the Foundry portal → select the agent → **Details** → copy the ID:
+The agent's **Egress identity** (see [Chapter 7](#7-storing-secrets-key-vault-and-managed-identity)) only exists **after** the deployment. We already printed it above, in fact we can see that it's the same value `4891d151...` that we can even retrieve as **Entra agent identity** from the Foundry portal → select the agent → **Details** → copy the ID:
 
 ![Microsoft Foundry portal — agent hello-world-python-responses (Running, Version 1), Details tab → Agent configuration. Under "Identity & access", the "Entra agent identity" ID (fd5d65ea-b2ec-4fcf-…) is highlighted with a copy button, alongside the "Entra agent blueprint" ID.](images/22-deployed-agent-identity-details.png)
 
