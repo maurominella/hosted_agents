@@ -1324,9 +1324,12 @@ environmentVariables:
 
 ![VS Code — azure.yaml: under services → hello-world-python-responses, the `name` key (highlighted) controls the name under which the agent is published on Foundry.](images/21-azureyaml-agent-name.png)
 
-Key characteristics of the **environment file `./.azure/hello-world-responses02-dev/.env`**:
+### Key characteristics of the **environment file `./.azure/hello-world-responses02-dev/.env`**:
 
 - The only pre‑existing variable is `AZURE_ENV_NAME` -for example: *hello-world-responses02-dev*-, added automatically when we create the environment — leave it there as it is.
+- Add the following **2 common variables**:
+  - `AZURE_SUBSCRIPTION_ID`
+  - `AZURE_LOCATION`
 - Add the **9 variables** that must be injected into the container.
 - To deploy the avent into an **existing** project, add the following **2 variables**:
   - `FOUNDRY_PROJECT_ENDPOINT` is needed but NOT to be injected into the container , but because the CLI AZD needs to know where to publish the agent, since we want to publish it into an *existing* project
