@@ -1416,7 +1416,7 @@ services:
 | | Deploy into an **existing** Foundry project | Deploy into a **new** Foundry project |
 |---|---|---|
 | **`azure.yaml`** | **Remove** the `ai-project` service (everything from `ai-project:` to `capacity: 10`) **and** the `uses: - ai-project` reference at the bottom of the agent service | **Keep** both services |
-| **Env vars** | (use the existing‑project vars) | add `AZURE_SUBSCRIPTION_ID` and `AZURE_LOCATION` |
+| **Env vars** | (use the existing‑project vars) | add `AZURE_RESOURCE_GROUP_ID` and `AZURE_AI_PROJECT_NAME` |
 | **Provision** | **No** `azd provision` | Run `azd provision` |
 
 For the **new‑project** path, `azd provision` creates everything:
@@ -1436,7 +1436,7 @@ https://portal.azure.com/#@/resource/subscriptions/eca2eddb-0f0c-4351-a634-52751
 
 > **Practical rule — one environment ≈ one deploy target.** A reused environment carries over the values already in its `.env`. To continue/update a deployment, reuse the environment; to start clean (e.g. change the target project), create a new env or overwrite values with `azd env set`. Don't mix two targets in one environment.
 
-### 16.4 And now — Deployment!
+### 16.4 And now... Deployment!
 
 **1. Verify the environment `.env`.** Provision or not, confirm the variables and the project you are about to deploy to:
 
