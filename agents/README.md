@@ -1518,15 +1518,17 @@ Decided by the presence of `codeConfiguration` in `azure.yaml`, **not** by the D
 
 #### Run the deployment
 
-```console
-mauromi@mauromistudio01:~/git_repos/hosted_agents/agents/hello-world-responses01$ azd deploy
+```bash
+mauromi@mmsurfacearm01:~/git_repos/hosted_agents/agents/hello-world-responses02$ azd deploy
 
-Service                         Status        Duration
-──────────────────────────────  ────────────  ──────────
-● hello-world-python-responses  Done          1m25s
+Deploying services (azd deploy)
 
-- Agent playground (portal): https://ai.azure.com/nextgen/r/7KLt2w8MQ1GmNFJ1FJnu6g,rg-aifoundry7159,,foundry7159,aif7159-standard-agent-project/build/agents/hello-world-python-responses/build?version=1
-- Agent endpoint (responses): https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project/agents/hello-world-python-responses/endpoint/protocols/openai/responses?api-version=v1
+
+  Service                       Status        Duration
+  ────────────────────────────  ────────────  ──────────
+  ● hello-world-python-responses  Done          15s
+- Agent playground (portal): https://ai.azure.com/nextgen/r/7KLt2w8MQ1GmNFJ1FJnu6g,rg-aifoundry7159,,foundry7159,aif7159-standard-agent-project/build/agents/hello-world-responses02/build?version=1
+- Agent endpoint (responses): https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project/agents/hello-world-responses02/endpoint/protocols/openai/responses?api-version=v1
 
 Next:
   azd ai agent show hello-world-python-responses
@@ -1538,7 +1540,31 @@ Next:
   azd ai agent invoke hello-world-python-responses '<payload>'
   test with the sample-specific payload
 
-SUCCESS: Your application was deployed to Azure in 1 minute 25 seconds.
+
+SUCCESS: Your application was deployed to Azure in 15 seconds
+```
+
+#### Check the deployment and retrieve the agent `Identity Principal ID`
+```bash
+mauromi@mmsurfacearm01:~/git_repos/hosted_agents/agents/hello-world-responses02$ azd ai agent show hello-world-python-responses
+FIELD                            VALUE
+-----                            -----
+ID                               hello-world-responses02:1
+Name                             hello-world-responses02
+Version                          1
+Status                           active
+Description                      Minimal Hello World agent using the Responses protocol with a bring-your-own approach. Calls a Foundry model via the Responses API and returns the response.
+Created At                       2026-08-17T21:52:06Z
+Agent GUID                       a1e317b0-39b2-45bd-842e-dbc33d41147b
+Instance Identity Principal ID   4891d151-bc9c-4b9e-86f0-d502fced19ac
+Instance Identity Client ID      4891d151-bc9c-4b9e-86f0-d502fced19ac
+Blueprint Principal ID           3f161023-1fe8-43be-b3de-9097ebc6bd3a
+Blueprint Client ID              d9ee3fb5-3136-4085-bc0c-43b4467e7046
+Blueprint Reference Type         ManagedAgentIdentityBlueprint
+Blueprint Reference ID           hello-world-responses02-a1e31
+Metadata[enableVnextExperience]  true
+Playground URL                   https://ai.azure.com/nextgen/r/7KLt2w8MQ1GmNFJ1FJnu6g,rg-aifoundry7159,,foundry7159,aif7159-standard-agent-project/build/agents/hello-world-responses02/build?version=1
+Endpoint (responses)             https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project/agents/hello-world-responses02/endpoint/protocols/openai/responses?api-version=v1
 ```
 
 #### What the deploy adds to the environment `.env`
