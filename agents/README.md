@@ -1287,7 +1287,7 @@ azd env new hello-world-responses02-dev
 
 ![VS Code Explorer showing the .azure/ folder expanded: the newly created hello-world-responses05-dev environment with .env, .env.lock, config.json, and .gitignore, alongside src/hello-world-python-responses.](images/20-azd-environment-created.png)
 
-> ⚠️ **Do not confuse** this with a possible `.env` in the project root (the one `load_dotenv()` uses in `monitoring.py` for the local `python main.py` run): that is a **different** file, for a **different** purpose. The file `.azure/hello-world-responses02-dev/.env` belongs only to `azd`.
+> ⚠️ **Do not confuse** the `.azure/hello-world-responses02-dev/.env` file automatically created in this folder that belongs to `azd`, with a possible `.env` that we have in the project root (the one `load_dotenv()` uses in `monitoring.py` for the local `python main.py` run): that is a **different** file, for a **different** purpose of providing CLI environment variables to be used for the AZD operations.
 
 ### 16.2 Container environment variables
 
