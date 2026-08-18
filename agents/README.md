@@ -1341,9 +1341,9 @@ environmentVariables:
 	- AZURE_RESOURCE_GROUP
   - AZURE_AI_PROJECT_NAME
 
-  ⚠️ Please note that for a **new** project, we **cannot** specify the Foundry resource name — only the resource group and the project name.
+  ⚠️ Please note that for a **new** project, we **cannot** specify the `Foundry resource` name — only the resource group and the project name. As a result, the `Foundry resource` will be auto-generated.
 
-**Minimal environment `.env` (grouped):**
+**Sammple of a minimal `./.azure/hello-world-responses02-dev/.env` file**:
 
 ```bash
 # -- Pre-existing (auto-added by `azd env new`) --
@@ -1373,9 +1373,11 @@ AZURE_RESOURCE_GROUP="rg-mauromi0001-foundry-dev"
 AZURE_AI_PROJECT_NAME="mm-foundry-account0001-project01"
 ```
 
-### 16.3 Do we always provision? It depends…
+### 16.3 Should we ***always*** do the provisioning? It depends…
 
-Inside `azure.yaml`, under `services:`, there are **two services**: **a)** `ai-project` (`host: azure.ai.project`) and **b)** `hello-world-python-responses` (`host: azure.ai.agent`):
+Inside `azure.yaml`, under `services:` branch, there are **two services**:
+- a) `ai-project` (`host: azure.ai.project`) and 
+- b) `hello-world-python-responses` (`host: azure.ai.agent`):
 
 ```yaml
 name: hello-world-python-responses
@@ -1409,7 +1411,7 @@ services:
     kind: hosted
 ```
 
-Two cases:
+#### The are two cases:
 
 | | Deploy into an **existing** Foundry project | Deploy into a **new** Foundry project |
 |---|---|---|
