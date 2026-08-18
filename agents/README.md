@@ -1483,7 +1483,8 @@ mauromi@mmsurfacearm01:~/git_repos/hosted_agents/agents/hello-world-responses02$
 ```
 
 
-**2. Verify `.agentignore` and `.azdignore` (in the root).** Because `project: .` zips the **entire** folder and this project was born with the old flow (without an ignore file), **without them** `azd` would also package `.venv`, `__pycache__`, and — above all — `.azure`, which contains your **secrets**. So creating these files is **indispensable**. `.agentignore` is read by the **agents extension's code deploy**; `.azdignore` by **`azd` core**. Keep them **identical**:
+**2. Verify `.agentignore` and `.azdignore` (in the root).** Because `project: .` zips the **entire** folder and this project was born with the old flow (without an ignore file), **without them** `azd` would also package `.venv`, `__pycache__`, and — above all — `.azure`, which contains your **secrets**. So creating these files is **indispensable**. `.agentignore` is read by the **agents extension's code deploy**; `.azdignore` by **`azd` core**.<br/>
+For practical reasons, **keep them IDENTICAL**:
 
 ```gitignore
 # Allowlist model: exclude everything, then re-include ONLY what the agent
@@ -1498,7 +1499,11 @@ mauromi@mmsurfacearm01:~/git_repos/hosted_agents/agents/hello-world-responses02$
 !requirements.txt
 ```
 
-**3. `azd deploy` ties `azure.yaml` + environment.** It reads `azure.yaml` (the *what*), takes the active environment (`.azure/<env>/.env`: the *where* + the `${...}` values), resolves the placeholders, and publishes to the target.
+**3. `azd deploy` ties `azure.yaml` + environment.** It reads:
+- `azure.yaml` (the *what*), 
+- the active environment (`.azure/<env_name>/.env`): the *where* + the `${...}` values), 
+- resolves the placeholders, 
+- and publishes to the target.
 
 **4. How it picks the files: NOT from the Dockerfile.** We use **code deploy** (`codeConfiguration` in `azure.yaml`), so the **Dockerfile is ignored**. `azd` zips the service folder (`project: .`), excludes what `.agentignore` lists, uploads the ZIP; **Foundry builds the image server‑side**, installs from `requirements.txt`, and runs `entryPoint: main.py`.
 
