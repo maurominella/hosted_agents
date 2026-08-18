@@ -1343,7 +1343,7 @@ environmentVariables:
 
   ⚠️ Please note that for a **new** project, we **cannot** specify the `Foundry resource` name — only the resource group and the project name. As a result, the `Foundry resource` will be auto-generated.
 
-**Sammple of a minimal `./.azure/hello-world-responses02-dev/.env` file**:
+**Sample of a minimal `./.azure/hello-world-responses02-dev/.env` file**:
 
 ```bash
 # -- Pre-existing (auto-added by `azd env new`) --
