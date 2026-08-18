@@ -1287,7 +1287,7 @@ azd env new hello-world-responses02-dev
 
 ![VS Code Explorer showing the .azure/ folder expanded: the newly created hello-world-responses05-dev environment with .env, .env.lock, config.json, and .gitignore, alongside src/hello-world-python-responses.](images/20-azd-environment-created.png)
 
-> ⚠️ **Do not confuse** the `.azure/hello-world-responses02-dev/.env` file automatically created in this folder that belongs to `azd`, with a possible `.env` that we have in the project root (the one `load_dotenv()` uses in `monitoring.py` for the local `python main.py` run): that is a **different** file, for a **different** purpose of providing CLI environment variables to be used for the AZD operations.
+> ⚠️ **Do not confuse** this `./.azure/hello-world-responses02-dev/.env` file automatically created in this folder that belongs to `azd`, with a possible `.env` that we have in the project root (the one `load_dotenv()` uses in `monitoring.py` for the local `python main.py` run): that is a **different** file, for a **different** purpose of providing CLI environment variables to be used for the AZD operations.
 
 ### 16.2 Container environment variables
 
@@ -1324,13 +1324,21 @@ environmentVariables:
 
 ![VS Code — azure.yaml: under services → hello-world-python-responses, the `name` key (highlighted) controls the name under which the agent is published on Foundry.](images/21-azureyaml-agent-name.png)
 
-Key characteristics of the **environment** `.env`:
+Key characteristics of the **environment file `./.azure/hello-world-responses02-dev/.env`**:
 
-- The only pre‑existing variable is `AZURE_ENV_NAME`, added automatically when we create the environment — we leave it.
+- The only pre‑existing variable is `AZURE_ENV_NAME` -for example: *hello-world-responses02-dev*-, added automatically when we create the environment — we leave it.
 - Add the **9 variables** that must be injected into the container.
-- Add the **2 variables** for deploying into an **existing** project, **or** the **2 variables** for a **new** project.
-- `FOUNDRY_PROJECT_ENDPOINT` is needed not because its value is injected into the container, but because the `azd` CLI must know **where** the Foundry project is.
-- ⚠️ For a **new** project you **cannot** specify the Foundry resource name — only the resource group and the project name.
+- Add the **2 variables** for deploying into an **existing** project:
+  - `FOUNDRY_PROJECT_ENDPOINT` is needed but NOT to be injected into the container , but because the CLI AZD needs to know where to publish the agent, since we want to publish it into an *existing* project
+  - `AZURE_AI_PROJECT_ID` because we need to precisely identify the Azure ARM resource to deploy the agent into
+
+**or** 
+
+- Add the **2 variables** for deploying into a **NEW** project:
+	- AZURE_RESOURCE_GROUP
+  - AZURE_AI_PROJECT_NAME
+
+  ⚠️ Please note that for a **new** project, we **cannot** specify the Foundry resource name — only the resource group and the project name.
 
 **Minimal environment `.env` (grouped):**
 
