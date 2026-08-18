@@ -1482,14 +1482,6 @@ mauromi@mmsurfacearm01:~/git_repos/hosted_agents/agents/hello-world-responses02$
 mauromi@mmsurfacearm01:~/git_repos/hosted_agents/agents/hello-world-responses02$
 ```
 
-```json
-{
-  "endpoint": "https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project",
-  "source": "azdEnv",
-  "sourceDetail": "azd env",
-  "azdEnv": "hello-world-responses02-dev"
-}
-```
 
 **2. Verify `.agentignore` and `.azdignore` (in the root).** Because `project: .` zips the **entire** folder and this project was born with the old flow (without an ignore file), **without them** `azd` would also package `.venv`, `__pycache__`, and — above all — `.azure`, which contains your **secrets**. So creating these files is **indispensable**. `.agentignore` is read by the **agents extension's code deploy**; `.azdignore` by **`azd` core**. Keep them **identical**:
 
