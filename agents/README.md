@@ -1326,15 +1326,15 @@ environmentVariables:
 
 Key characteristics of the **environment file `./.azure/hello-world-responses02-dev/.env`**:
 
-- The only pre‑existing variable is `AZURE_ENV_NAME` -for example: *hello-world-responses02-dev*-, added automatically when we create the environment — we leave it.
+- The only pre‑existing variable is `AZURE_ENV_NAME` -for example: *hello-world-responses02-dev*-, added automatically when we create the environment — leave it there as it is.
 - Add the **9 variables** that must be injected into the container.
-- Add the **2 variables** for deploying into an **existing** project:
+- To deploy the avent into an **existing** project, add the following **2 variables**:
   - `FOUNDRY_PROJECT_ENDPOINT` is needed but NOT to be injected into the container , but because the CLI AZD needs to know where to publish the agent, since we want to publish it into an *existing* project
   - `AZURE_AI_PROJECT_ID` because we need to precisely identify the Azure ARM resource to deploy the agent into
 
 **or** 
 
-- Add the **2 variables** for deploying into a **NEW** project:
+- To deploy the avent into a **NEW** project, add the following **2 variables**:
 	- AZURE_RESOURCE_GROUP
   - AZURE_AI_PROJECT_NAME
 
