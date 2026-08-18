@@ -1441,9 +1441,45 @@ https://portal.azure.com/#@/resource/subscriptions/eca2eddb-0f0c-4351-a634-52751
 **1. Verify the environment `.env`.** Provision or not, confirm the variables and the project you are about to deploy to:
 
 ```bash
-azd env get-values
-# must see your existing project
-azd ai project show --output json
+mauromi@mmsurfacearm01:~/git_repos/hosted_agents/agents/hello-world-responses02$ azd env list
+NAME                         DEFAULT   LOCAL     REMOTE
+hello-world-responses02-dev  true      true      false
+
+mauromi@mmsurfacearm01:~/git_repos/hosted_agents/agents/hello-world-responses02$ azd env select hello-world-responses02-dev
+
+mauromi@mmsurfacearm01:~/git_repos/hosted_agents/agents/hello-world-responses02$ azd env get-values
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_ENDPOINT="https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project/agents/hello-world-responses02/versions/1"
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_INSTANCE_IDENTITY_CLIENT_ID="4891d151-bc9c-4b9e-86f0-d502fced19ac"
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_INSTANCE_IDENTITY_PRINCIPAL_ID="4891d151-bc9c-4b9e-86f0-d502fced19ac"
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_NAME="hello-world-responses02"
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_PROJECT_ENDPOINT="https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project"
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_RESPONSES_ENDPOINT="https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project/agents/hello-world-responses02/endpoint/protocols/openai/responses?api-version=v1"
+AGENT_HELLO_WORLD_PYTHON_RESPONSES_VERSION=1
+APP_OBO_CLIENT_ID="3a0fad96-b026-4f5f-914a-fc6348656f6b"
+APP_OBO_CLIENT_SECRET_NAME="APP-OBO-CLIENT-SECRET"
+APP_OBO_TENANT_ID="3ad0b905-34ab-4116-93d9-c1dcc2d35af6"
+AZURE_AI_MODEL_DEPLOYMENT_NAME="gpt-5.4-mini"
+AZURE_AI_PROJECT_ID="/subscriptions/eca2eddb-0f0c-4351-a634-52751499eeea/resourceGroups/rg-aifoundry7159/providers/Microsoft.CognitiveServices/accounts/foundry7159/projects/aif7159-standard-agent-project"
+AZURE_ENV_NAME="hello-world-responses02-dev"
+AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING="true"
+AZURE_LOCATION="swedencentral"
+AZURE_SUBSCRIPTION_ID="eca2eddb-0f0c-4351-a634-52751499eeea"
+CLIENT_USER_TOKEN_HEADER="x-client-user-token"
+ENABLE_CAPABILITY_HOST="false"
+ENABLE_HOSTED_AGENTS="true"
+ENABLE_SENSITIVE_DATA="true"
+FOUNDRY_PROJECT_ENDPOINT="https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project"
+GRAPH_SCOPES="[\"https://graph.microsoft.com/Files.Read\"]"
+KEY_VAULT_URL="https://mauromikeyvault01.vault.azure.net/"
+
+mauromi@mmsurfacearm01:~/git_repos/hosted_agents/agents/hello-world-responses02$ azd ai project show --output json
+{
+  "endpoint": "https://foundry7159.services.ai.azure.com/api/projects/aif7159-standard-agent-project",
+  "source": "azdEnv",
+  "sourceDetail": "azd env",
+  "azdEnv": "hello-world-responses02-dev"
+}
+mauromi@mmsurfacearm01:~/git_repos/hosted_agents/agents/hello-world-responses02$
 ```
 
 ```json
